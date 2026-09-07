@@ -24,7 +24,7 @@
 | 包管理 | uv | 锁文件 + 免激活环境 |
 | Web 框架 | FastAPI（最新稳定）+ uvicorn | 原生 OpenAPI、内置 SSE（`fastapi.sse`）、Pydantic 校验 |
 | AI 编排 | LangChain 1.1.x + LangGraph 1.0.x | LangChain 管模型/提示/结构化输出/RAG 组件；LangGraph 管面试会话状态机 |
-| 对话模型 | 不绑定供应商，`init_chat_model` 配置化接入 | OpenAI 兼容协议或官方集成皆可；离线演示可用假模型/本地模型 |
+| 对话模型 | 不绑定供应商，`init_chat_model` 配置化接入 | local：本机 Ollama 小模型；online：OpenAI 兼容端点或官方集成 |
 | Embedding | BGE-M3（SiliconFlow / Ollama 本地） | 1024 维，中文检索效果好，接口可换 |
 | 向量库 | PostgreSQL + pgvector（`langchain-postgres`） | 与业务库同实例；自动建表；元数据过滤实现用户隔离 |
 | 业务数据库 | PostgreSQL 16 | 单库承载业务 + 向量 |
@@ -111,18 +111,16 @@ evaluate_answer ──(判定：追问)──► follow_up ──┘
 ### 2.5 对话模型接入
 
 - 通过 **`init_chat_model`** 工厂按配置构造：`"<provider>:<model>"` 字符串、`model_provider`、超时/温度等参数全部来自配置层，业务代码只见 `BaseChatModel` 协议，代码中不出现具体模型名。
-- 接入要求（满足其一即可）：
-  1. **OpenAI 兼容端点**（DeepSeek、Qwen、SiliconFlow、GLM、vLLM 等，改 base-url + key）；
-  2. LangChain 官方集成存在（Anthropic、Google 等）。
-- **离线演示模式**：配置 `fake` 模式时注入 `FakeListChatModel`（LangChain 内置），无 key 无网络跑通完整面试闭环。
+- 两种运行模式（`APP_LLM_MODE`）：
+  1. **local**（本地开发）：接入本机 Ollama 小模型（langchain-ollama 集成，默认 `qwen3:8b`），无 key 无外网；
+  2. **online**（生产）：OpenAI 兼容端点（DeepSeek、Qwen、SiliconFlow、GLM、vLLM 等，改 base-url + key），或 LangChain 官方集成（Anthropic、Google 等）。
 - 供应商与模型名写入 `config.py`（pydantic-settings），环境变量注入。
 
 ### 2.6 Embedding
 
-- **BGE-M3（1024 维）**，两种接入方式按环境切换：
-  - 线上：SiliconFlow（OpenAI 兼容端点，`init_embeddings("openai:BAAI/bge-m3", base_url=...)`）；
-  - 本地：Ollama `bge-m3`（`OllamaEmbeddings`）。
-- 离线演示：`FakeEmbeddings` 兜底。
+- **BGE-M3（1024 维）**，按运行模式切换（`APP_LLM_MODE`）：
+  - local：Ollama `bge-m3`（`OllamaEmbeddings`）；
+  - online：SiliconFlow（OpenAI 兼容端点，`init_embeddings("openai:BAAI/bge-m3", base_url=...)`）。
 - 维度约束：PGVector 表维度在建表时固定，**切换 Embedding 模型必须保证维度一致或重建向量表**；维度作为配置项，与建表动作对齐。
 
 ### 2.7 向量库：pgvector
@@ -135,7 +133,7 @@ evaluate_answer ──(判定：追问)──► follow_up ──┘
 
 ### 2.8 业务数据库与 ORM
 
-- **PostgreSQL 16**：业务数据与向量同库同实例（pgvector 扩展），部署最简。
+- **PostgreSQL 16**（开发环境用本机 PostgreSQL，需启用 pgvector 扩展）：业务数据与向量同库同实例，部署最简。
 - **SQLAlchemy 2.0（async + asyncpg）+ Alembic**：业务表（user / resume / jd / interview_session / interview_qa / evaluation_report）自 MVP 起带 `user_id` 列并建索引；Alembic 只管业务表，向量表不纳入迁移。
 - 服务层统一从依赖注入的当前用户取 user_id，杜绝遗漏（§5-E7）。
 
@@ -209,8 +207,9 @@ fc-interview-agent/
 
 ### 4.4 本地开发环境
 
-- `docker compose up -d` 只起 PostgreSQL（pgvector 镜像）；后端 `uv run uvicorn app.main:app --reload`、前端 `pnpm dev`。
-- **离线演示**：`APP_LLM_MODE=fake` 时注入假模型 + 假嵌入，无 key 无网络跑通完整面试闭环（面试官与求职者两个方向均可演示）。
+- 本地开发直接使用**本机 PostgreSQL**（创建 `fc_interview` 库，M3 起启用 vector 扩展）；Docker 仅用于最终打包分发（§4.5），开发期不启动。
+- 后端 `uv run uvicorn app.main:app`、前端 `pnpm dev`（根目录 `dev.bat` 一键启动两者）。
+- **本地开发**：`APP_LLM_MODE=local` 时接入本机 Ollama（对话 `qwen3:8b` + 嵌入 `bge-m3`），无 key 无外网跑通完整面试闭环（面试官与求职者两个方向均可演示）。
 
 ### 4.5 构建与部署（演示形态）
 
@@ -245,7 +244,7 @@ fc-interview-agent/
 | langchain | 1.1.x | 核心抽象、模型工厂、结构化输出 |
 | langgraph | 1.0.x | 面试会话状态机 |
 | langchain-openai | 1.x | OpenAI 兼容端点接入（对话 + 嵌入） |
-| langchain-ollama | 1.x | 本地模型（可选，离线/降级） |
+| langchain-ollama | 1.x | 本地 Ollama 模型（local 模式） |
 | langchain-text-splitters | 1.x | 简历/JD 中文切片 |
 | langchain-postgres | 1.x | PGVector 向量库（自动建表） |
 | langgraph-checkpoint-sqlite | 1.x | 会话检查点持久化 |

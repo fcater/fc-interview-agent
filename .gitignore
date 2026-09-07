@@ -1,0 +1,27 @@
+# --- Python / uv (server) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+uv.lock.hash
+server/data/
+server/.ruff_cache/
+
+# --- Node / pnpm (client) ---
+node_modules/
+client/dist/
+client/.vite/
+*.local
+
+# --- 编辑器 / 系统 ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# --- 日志 ---
+*.log
+
+tests/
