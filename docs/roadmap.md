@@ -1,0 +1,216 @@
+# AI 面试 Agent — 开发 Roadmap
+
+> 版本：v1.0 ｜ 日期：2026-09-07
+> 依据：[project-scope.md](project-scope.md) ｜ [tech-stack.md](tech-stack.md)
+> 本文档为 AI 辅助开发的开发顺序依据：**严格按 M0 → M7 顺序逐阶段开发**，每阶段完成并验收通过后，再进入下一阶段；阶段内任务按列表顺序执行。
+
+---
+
+## 0. 使用约定
+
+1. **顺序开发**：阶段之间存在依赖关系，不允许跳跃；每阶段结束状态均为可运行、可演示。
+2. **验收为准**：每阶段的验收标准是「手动可验证的运行行为」（作品项目，无自动化测试负担）；验收未通过不进入下一阶段。
+3. **离线可跑**：全流程兼容 `APP_LLM_MODE=fake` 假模型模式（tech-stack §2.5），任何阶段验收都不得依赖真实 API key。
+4. **扩展点不破坏**：开发任何功能时，不得绕过 tech-stack §5 的 E1–E10 扩展点约定（接口 + 配置，不写死供应商）。
+5. **数据维度**：所有业务表与向量检索自写入起必须携带 `user_id`（E7），不留下后期重构项。
+
+---
+
+## 1. 阶段总览
+
+| 阶段 | 内容 | 依赖 | 对应 project-scope |
+|---|---|---|---|
+| M0 | 工程骨架（server + client 初始化） | — | — |
+| M1 | 数据层 + 用户体系（注册登录、JWT、隔离） | M0 | §2.7 |
+| M2 | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | M1 | §2.1、§2.2 |
+| M3 | 知识库 RAG（切片、嵌入、向量检索） | M2 | §2.1 |
+| M4 | **AI 面试官核心闭环（LangGraph）** | M3 | §2.4、§2.6、§3 |
+| M5 | 面试评估与复盘 | M4 | §2.5、§2.6 |
+| M6 | AI 求职者（含预设答案匹配） | M4 | §2.3 |
+| M7 | 部署与收尾 | M5、M6 | §5 验收标准 |
+
+---
+
+## 2. 阶段明细
+
+### M0 工程骨架
+
+**目标**：按 tech-stack §4.1 目录结构初始化前后端工程，基础设施可一键启动。
+
+**任务**：
+
+1. 根目录：`docker-compose.yml`（`pgvector/pgvector:pg16`）、`.gitignore`、README 占位。
+2. server/：uv 初始化（`pyproject.toml`）、ruff 配置；FastAPI 入口 `app/main.py` + `/health`；`config.py`（pydantic-settings，含 `APP_LLM_MODE`、DB、JWT 等全部配置项骨架）；`.env.example`。
+3. server/：按 §4.1 建空目录结构（core/models/schemas/routers/services/agents/knowledge/llm/prompts）。
+4. client/：pnpm 初始化 Vite + React + TS；接入 Tailwind CSS 4 + shadcn/ui；React Router 路由骨架（登录/注册、首页占位页）。
+5. client/：API 客户端封装（fetch + JWT header 预留）、环境变量代理配置（`/api` → 后端）。
+
+**验收**：
+
+- `docker compose up -d` 启动 PG（含 vector 扩展）。
+- `uv run uvicorn app.main:app --reload` 后 `/health` 返回正常；`/docs` 可见 OpenAPI 页面。
+- `pnpm dev` 前端可访问，首页能请求到后端 `/health`。
+
+---
+
+### M1 数据层 + 用户体系
+
+**目标**：业务表全部就位（含 user_id），注册登录闭环，隔离机制落地。
+
+**任务**：
+
+1. SQLAlchemy 2.0 async 模型：user / resume / jd / interview_session / interview_qa / evaluation_report，全部带 `user_id` 列 + 索引（tech-stack §2.8）。
+2. Alembic 初始化 + 首个迁移；`alembic upgrade head` 幂等。
+3. 认证：注册（bcrypt 口令哈希）、登录（pyjwt 签发）、`Depends` 解析当前用户注入路由（tech-stack §2.9）。
+4. 全局异常处理（业务异常 → 统一错误结构）+ loguru 日志接入。
+5. 前端：注册/登录页、Token 存储、路由守卫、TanStack Query 接入。
+
+**验收**：
+
+- 注册 → 登录 → 携带 Token 访问受保护接口。
+- 两个账号各自创建的任意数据互不可见（以 M2/M3 阶段数据持续验证）。
+- 未携带 / 伪造 Token 的请求返回 401。
+
+---
+
+### M2 简历与 JD 管理
+
+**目标**：简历 Markdown 解析入库（脱敏生效），JD 录入与关键点提取。
+
+**任务**：
+
+1. `ResumeParser` Protocol + 注册表（`dict[str, ResumeParser]`），实现 `MarkdownParser`（E1）。
+2. 脱敏工具：手机号 / 邮箱正则脱敏，位于「解析后、切片前」（E10）。
+3. 简历 CRUD API（上传文本 → 解析 → 脱敏 → 存储；列表/详情/删除，用户隔离）。
+4. JD CRUD API + 关键点提取（`with_structured_output` Pydantic schema，E8）+ 历史 JD 列表复用。
+5. 前端：简历上传/查看页（Markdown 渲染）、JD 录入页（粘贴文本 → 提取结果展示 → 保存/选择历史）。
+
+**验收**：
+
+- 上传 Markdown 简历，入库内容中手机号 / 邮箱已被脱敏替换。
+- 粘贴 JD 后返回结构化关键点（技术栈、要求、加分项等），保存后可复选历史 JD。
+- 账号 A 看不到账号 B 的简历与 JD。
+
+---
+
+### M3 知识库 RAG
+
+**目标**：简历切片 → 嵌入 → 向量入库 → 语义检索全链路，用户隔离与阈值配置就位。
+
+**任务**：
+
+1. 切片：`RecursiveCharacterTextSplitter` 中文分隔符定制 + 段落重叠（tech-stack §2.3、R6）。
+2. Embedding 接入：BGE-M3 三模式（SiliconFlow / Ollama 本地 / FakeEmbeddings），由配置切换（tech-stack §2.6）。
+3. PGVector 接入：自动建表、元数据写入（user_id、来源、标签）、检索 `filter={"userId": user_id}` 强制过滤（E3、E7）。
+4. 检索服务：`knowledge/` 模块封装语义检索（topK、相似度阈值配置项，E6），供后续面试官/求职者图共用。
+5. 简历入库流程打通：上传简历 → 切片 → 嵌入 → 向量入库；删除简历时同步清理向量。
+
+**验收**：
+
+- 上传简历后向量表有切片记录（含元数据）。
+- 用简历相关问题检索，返回相关片段且排序合理；无关问题在阈值内返回空。
+- 账号 A 的检索结果不包含账号 B 的切片。
+- `APP_LLM_MODE=fake` 下全链路可跑（FakeEmbeddings）。
+
+---
+
+### M4 AI 面试官核心闭环（LangGraph）★ 核心阶段
+
+**目标**：tech-stack §2.4 的面试官图落地，完成「提问 → 回答 → 追问 → 结束」流式闭环与会话持久化。
+
+**任务**：
+
+1. `InterviewState`（TypedDict）与消息 / 阶段类型定义（schemas/）。
+2. 面试官图：`generate_question → wait_answer（interrupt）→ evaluate_answer →（追问 follow_up / 下一题 / 结束 summarize）`，条件边按判定结果路由；题数上限、追问轮数读配置（E4）。
+3. 节点实现：出题（基础/项目/技术深挖类型分布）、判答（结构化输出：简短评估 + 是否追问 + 追问点）、追问、总结，全部 `with_structured_output`（E8）。
+4. 会话管理：`SqliteSaver` + `thread_id` = 面试会话 id；会话恢复（`get_state` / 刷新续接）。
+5. 面试 REST API：开始面试（携带简历/JD）→ 获取当前问题（SSE 流式）→ 提交回答（`Command(resume=...)`）→ 提前结束 → 恢复会话。
+6. SSE 端点：`EventSourceResponse`，token 流（`stream(mode="messages")`）+ 阶段事件（出题/追问/结束）（E9）。
+7. 面试记录持久化：interview_session / interview_qa 写入（含 user_id）。
+8. 前端面试会话页：流式渲染问题与 AI 反馈、回答输入与提交、追问轮次展示、提前结束按钮、断线重连提示。
+
+**验收**：
+
+- 完成一次默认题数（8 题，可配置）的完整面试，含动态追问（追问轮数符合配置上限）。
+- 全流程流式输出（逐 token 渲染），无整块等待。
+- 面试中途刷新页面，会话可从当前问题恢复继续。
+- 提前结束可随时生效，会话状态与记录正确落库。
+- `APP_LLM_MODE=fake` 下同样可完成闭环（作品演示保障）。
+
+---
+
+### M5 面试评估与复盘
+
+**目标**：面试结束产出结构化评分报告，历史面试记录可查。
+
+**任务**：
+
+1. 评分节点：结构化输出（综合评分 / 技术能力 / 项目理解 / 表达能力 / 岗位匹配度 + 主要问题总结 + 改进建议），schema 固定（E8）。
+2. rubric 模板文件化（`app/prompts/`），评分维度与标准随模板可替换（E5）。
+3. evaluation_report 持久化；面试记录列表 / 详情 API（用户隔离）。
+4. 前端：评分报告展示页（雷达/分项 + 建议）、历史面试列表与详情回看。
+
+**验收**：
+
+- 面试结束（自然结束与提前结束）均产出评分报告，字段完整、格式稳定。
+- 历史面试可按列表进入详情，问题/回答/评分完整回看。
+- 替换 rubric 模板后，评分维度与标准随之变化，程序无需改动。
+
+---
+
+### M6 AI 求职者
+
+**目标**：用户提问、AI 基于简历知识库回答，支持预设答案优先与追问点评。
+
+**任务**：
+
+1. 求职者图：复用节点实现与状态基类，注入求职者提示词与检索逻辑；结构为「用户提问 → interrupt 等回答 → RAG 检索（简历 + 预设答案）→ 生成回答 → 用户追问循环」（tech-stack §2.4）。
+2. 不虚构约束：系统提示词声明「仅依据简历/知识库内容回答，缺失时明确说明不知道」（对应 scope §2.3 核心约束）。
+3. 预设标准答案：入库接口（题目 + 答案 + 标签）、标签元数据写入向量库；匹配策略「标签 + 相似度阈值」双重匹配，命中度不足时 AI 自由发挥（E6）。
+4. 回答点评：用户请求后结构化输出点评（优点/不足/改进建议）。
+5. 前端：求职者模式会话页（提问流式回答、追问、请求点评、预设答案管理入口）。
+
+**验收**：
+
+- 用户提问后 AI 基于简历内容回答，与简历无关的问题明确表示无法回答（不虚构）。
+- 命中预设答案时优先采用预设内容；未命中时正常生成。
+- 追问可连续进行；请求点评返回结构化点评。
+- `APP_LLM_MODE=fake` 下闭环可演示。
+
+---
+
+### M7 部署与收尾
+
+**目标**：一键启动全栈，演示与使用体验完善。
+
+**任务**：
+
+1. server Dockerfile（uv 构建 → slim 镜像）；client 构建产物 + nginx 配置（反代 `/api`，SSE 关闭 `proxy_buffering`，tech-stack §4.5）。
+2. 全栈 `docker-compose.yml`（PG + server + client/nginx），一键起停。
+3. README：架构说明、启动方式、环境变量说明（`.env.example` 对齐）、离线演示说明、技术选型与 roadmap 文档链接。
+4. 体验细节：加载态、空态、错误提示、LLM 失败重试兜底（R4）、SSE 断连提示（R5）。
+
+**验收**：
+
+- 新环境按 README 步骤可一键启动全栈并完成演示闭环：注册 → 上传简历 → 录入 JD → 面试 → 评分 → 复盘。
+- 离线模式（fake）与真实模型模式均验证通过。
+
+---
+
+## 3. 阶段边界（MVP 不实现）
+
+以下内容不在 M0–M7 范围（project-scope §6），开发中若涉及仅保留接口占位：
+
+- 语音 / 视频面试、人脸情绪识别、多人面试、在线编程
+- PDF / Word / 图片简历解析（`ResumeParser` 注册表已预留）
+- 运行时多模型切换（仅配置时切换）
+- 复杂面试官人格系统（策略注入点已预留，E4）
+- 复杂用户成长体系、自动学习计划
+- 招聘 / 简历投递
+
+---
+
+## 4. 开发过程中的文档同步约定
+
+- 架构或选型出现偏离本 roadmap / tech-stack 的重大变更时，先更新对应文档再继续开发，保证「文档 = 现状」。
+- 每阶段验收通过后，在 README 的进度表中标记阶段状态。
