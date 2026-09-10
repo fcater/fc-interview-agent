@@ -1,0 +1,15 @@
+# 行尾统一为 LF：Docker 构建（Linux 环境）与跨平台协作保持一致，
+# 避免 Windows autocrlf 把 CRLF 带入镜像内的脚本/配置。
+* text=auto eol=lf
+
+# 脚本文件显式 LF（shebang / 容器内执行均依赖）
+*.sh text eol=lf
+*.py text eol=lf
+
+# 二进制不转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

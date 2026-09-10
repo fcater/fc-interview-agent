@@ -33,8 +33,11 @@ psql -U postgres -c "CREATE DATABASE fc_interview OWNER fc_interview;"
 # 2. 配置环境变量（凭据一律走环境变量，仓库只提供 .env.example）
 cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步创建的账号密码
 
-# 3. 一键启动后端 + 前端（分别开两个窗口，双击或命令行运行）
-dev.bat
+# 3. 初始化业务表（Alembic，幂等可重复执行）
+cd server && uv run alembic upgrade head
+
+# 4. 一键启动后端 + 前端（POSIX 脚本，Linux / macOS / Windows Git Bash 通用；Ctrl+C 停止）
+./dev.sh
 
 # 后端 http://localhost:8000（/docs 为 OpenAPI 页面，Postman 直连此端口）
 # 前端 http://localhost:5173（浏览器访问，/api 代理到后端）
@@ -97,7 +100,7 @@ dev.bat
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | 工程骨架（server + client 初始化） | ✅ 已验收 |
-| M1 | 数据层 + 用户体系（注册登录、JWT、隔离） | ⬜ |
+| M1 | 数据层 + 用户体系（注册登录、JWT、隔离） | ✅ 已验收 |
 | M2 | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | ⬜ |
 | M3 | 知识库 RAG（切片、嵌入、向量检索） | ⬜ |
 | M4 | AI 面试官核心闭环（LangGraph） | ⬜ |

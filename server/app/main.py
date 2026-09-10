@@ -1,14 +1,22 @@
-"""FastAPI 应用入口：应用创建、路由注册、CORS。
+"""FastAPI 应用入口：应用创建、中间件、路由注册、异常处理。
 
-启动：`uv run uvicorn app.main:app --reload`（在 server/ 目录下）
+启动：`uv run uvicorn app.main:app --port 8000`（在 server/ 目录下，见根目录 dev.sh）
 """
 
+import time
+
 import asyncpg
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from app.config import settings
+from app.core.errors import register_exception_handlers
+from app.core.log import setup_logging
+from app.routers import auth, users
 from app.schemas.health import HealthResponse
+
+setup_logging()
 
 app = FastAPI(
     title="AI 面试模拟 Agent API",
@@ -24,9 +32,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """请求日志：方法 / 路径 / 状态码 / 耗时。"""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "{} {} -> {} ({:.1f}ms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
+
+register_exception_handlers(app)
+
+# ── 业务路由（统一 /api 前缀，与 vite / nginx 反代对齐）───────────
+app.include_router(auth.router, prefix="/api")  # POST /api/auth/register、/api/auth/login
+app.include_router(users.router, prefix="/api")  # GET /api/users/me（受保护）
+
 # ── 健康检查 ─────────────────────────────────────────────────────────
 # 同时挂载 /health（后端验收入口）与 /api/health（前端 /api 代理链路验收）。
-# M1 起业务路由统一挂载 /api 前缀，与 vite / nginx 反代对齐。
 health_router = APIRouter(tags=["health"])
 
 

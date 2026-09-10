@@ -30,7 +30,7 @@
 | 业务数据库 | PostgreSQL 16 | 单库承载业务 + 向量 |
 | ORM / 迁移 | SQLAlchemy 2.0（async）+ Alembic | 仅业务表走迁移；向量表由 PGVector 自动建 |
 | 会话持久化 | LangGraph Checkpointer（SQLite） | thread_id = 面试会话 id，支持中断恢复 |
-| 认证 | JWT（pyjwt + bcrypt） | 无状态；user_id 贯穿所有查询与向量过滤 |
+| 认证 | JWT（pyjwt + bcrypt） | user_id 贯穿所有查询与向量过滤；JWT 携带令牌版本（token_version），重新登录作废旧 Token（单会话） |
 | API 文档 | FastAPI 自带 OpenAPI | 同时作为前端类型生成源 |
 | 可观测性 | 结构化日志；LangSmith 仅预留接入点 | MVP 不引入 |
 | 前端框架 | React 19 + Vite + TypeScript | 与团队核心技能一致 |
@@ -140,6 +140,7 @@ evaluate_answer ──(判定：追问)──► follow_up ──┘
 ### 2.9 认证
 
 - **JWT + bcrypt**：登录签发 Token，前端 `Authorization: Bearer`；`Depends` 解析出当前用户注入路由。
+- **单会话（token_version）**：用户表带 `token_version`，每次登录原子 +1 并写入 JWT 的 `ver` claim；`get_current_user` 比对 claim 与库内值，不一致即 401——重新登录（或未来改密码 +1）后旧 Token 立即失效。
 - 权限模型 MVP 极简：单角色，**隔离而非鉴权**——安全边界落在「所有查询强制 user_id」（业务查询条件 + 向量检索 filter 双层）。
 
 ### 2.10 可观测性
@@ -208,7 +209,7 @@ fc-interview-agent/
 ### 4.4 本地开发环境
 
 - 本地开发直接使用**本机 PostgreSQL**（创建 `fc_interview` 库，M3 起启用 vector 扩展）；Docker 仅用于最终打包分发（§4.5），开发期不启动。
-- 后端 `uv run uvicorn app.main:app`、前端 `pnpm dev`（根目录 `dev.bat` 一键启动两者）。
+- 后端 `uv run uvicorn app.main:app`、前端 `pnpm dev`（根目录 `dev.sh` 一键启动两者，POSIX 脚本与 Docker 内环境一致，不依赖宿主操作系统）。
 - **本地开发**：`APP_LLM_MODE=local` 时接入本机 Ollama（对话 `qwen3:8b` + 嵌入 `bge-m3`），无 key 无外网跑通完整面试闭环（面试官与求职者两个方向均可演示）。
 
 ### 4.5 构建与部署（演示形态）

@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useCurrentUser } from '@/hooks/use-current-user'
 import type { components } from '@/api/schema'
 
 type HealthResponse = components['schemas']['HealthResponse']
 
-/** 首页占位页：验证「前端 → /api 代理 → 后端 /health」全链路 */
+/** 首页：登录用户信息 + 服务状态（前端 → /api 代理 → 后端 /health 全链路） */
 export function HomePage() {
+  const me = useCurrentUser()
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api.get<HealthResponse>('/health'),
@@ -19,9 +21,34 @@ export function HomePage() {
       <section>
         <h1 className="text-2xl font-semibold tracking-tight">首页</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          M0 工程骨架已就绪。后续里程碑将提供：简历管理、JD 管理、AI 模拟面试与面试复盘。
+          M1 用户体系已就绪。后续里程碑将提供：简历管理、JD 管理、AI 模拟面试与面试复盘。
         </p>
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>我的账号</CardTitle>
+          <CardDescription>登录态来自 JWT（每次登录会作废之前的 Token）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-muted-foreground">用户名</span>
+            <span className="font-medium">{me.data?.username}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-muted-foreground">用户 ID</span>
+            <span className="font-mono">{me.data?.id}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-muted-foreground">注册时间</span>
+            <span>
+              {me.data
+                ? new Date(me.data.created_at).toLocaleString('zh-CN', { hour12: false })
+                : '—'}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

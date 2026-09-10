@@ -1,28 +1,33 @@
 /**
- * API 客户端封装：fetch + JWT header 预留。
+ * API 客户端封装：fetch + JWT header 注入 + 统一错误结构解析。
  * 所有请求统一走 /api 前缀：开发环境由 Vite 代理到后端（见 vite.config.ts），
  * 生产环境由 nginx 反代（见 docs/tech-stack.md §4.5）。
+ * 后端错误体为 {code, message, detail}（见 server/app/schemas/common.py）。
  */
+
+import type { components } from '@/api/schema'
 
 const BASE_URL = '/api'
 
 const TOKEN_KEY = 'fc_interview_token'
 
-/** Token 存取（M1 接入登录后写入；请求侧 Authorization header 已预留） */
+/** Token 存取（登录后写入；请求侧 Authorization header 自动注入） */
 export const tokenStore = {
   get: (): string | null => localStorage.getItem(TOKEN_KEY),
   set: (token: string): void => localStorage.setItem(TOKEN_KEY, token),
   clear: (): void => localStorage.removeItem(TOKEN_KEY),
 }
 
-/** 统一业务错误：携带 HTTP 状态码，便于调用方分类处理（如 401 跳登录） */
+/** 统一业务错误：携带 HTTP 状态码与后端错误码（code），便于调用方分类处理（如 401 跳登录） */
 export class ApiError extends Error {
   readonly status: number
+  readonly code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -38,14 +43,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers })
   if (!res.ok) {
-    let detail = `请求失败（${res.status}）`
+    let message = `请求失败（${res.status}）`
+    let code: string | undefined
     try {
-      const body = (await res.json()) as { detail?: unknown }
-      if (typeof body.detail === 'string') detail = body.detail
+      const body = (await res.json()) as { code?: string; message?: string; detail?: unknown }
+      if (typeof body.message === 'string' && body.message) message = body.message
+      else if (typeof body.detail === 'string') message = body.detail
+      code = body.code
     } catch {
       /* 响应体非 JSON 时保留默认错误信息 */
     }
-    throw new ApiError(res.status, detail)
+    throw new ApiError(res.status, message, code)
   }
   if (res.status === 204) {
     return undefined as T
@@ -60,4 +68,17 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+}
+
+// ── 认证接口（类型来自 pnpm gen:api 生成的 schema.d.ts）──────────
+
+export type UserResponse = components['schemas']['UserResponse']
+export type TokenResponse = components['schemas']['TokenResponse']
+export type LoginRequest = components['schemas']['LoginRequest']
+export type RegisterRequest = components['schemas']['RegisterRequest']
+
+export const authApi = {
+  register: (data: RegisterRequest) => api.post<UserResponse>('/auth/register', data),
+  login: (data: LoginRequest) => api.post<TokenResponse>('/auth/login', data),
+  me: () => api.get<UserResponse>('/users/me'),
 }
