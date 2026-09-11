@@ -34,14 +34,16 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24
 
     # ── 对话模型（E2：init_chat_model 配置化接入） ───────────────
-    # local：provider=ollama，模型跑在本机（地址见 ollama_base_url）
-    # online：provider=openai 兼容协议，走 chat_base_url + chat_api_key
-    chat_provider: str = "ollama"
+    # provider 留空时按运行模式推导（local→ollama，online→openai 兼容协议）；
+    # 显式设置可覆盖推导（如 local 模式接局域网 vLLM：APP_CHAT_PROVIDER=openai）
+    chat_provider: str = ""
     chat_model: str = "qwen3:8b"
     ollama_base_url: str = "http://localhost:11434"
     chat_base_url: str = ""
     chat_api_key: str = ""
     chat_temperature: float = 0.7
+    # 提取类任务（JD 关键点等）为确定性任务，用独立低温减少字段漂移（R4）
+    chat_extract_temperature: float = 0.1
     chat_timeout_seconds: int = 60
     chat_max_retries: int = 1
 

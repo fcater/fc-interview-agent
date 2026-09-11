@@ -33,6 +33,16 @@ export function AppLayout() {
             >
               首页
             </NavLink>
+            {token && (
+              <>
+                <NavLink to="/resumes" className={({ isActive }) => navLinkClass(isActive)}>
+                  简历
+                </NavLink>
+                <NavLink to="/jds" className={({ isActive }) => navLinkClass(isActive)}>
+                  JD
+                </NavLink>
+              </>
+            )}
             {token ? (
               <>
                 <span className="px-3 text-sm text-muted-foreground">

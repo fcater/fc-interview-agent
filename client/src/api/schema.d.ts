@@ -55,6 +55,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/resumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resumes */
+        get: operations["list_resumes_api_resumes_get"];
+        put?: never;
+        /** Create Resume */
+        post: operations["create_resume_api_resumes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/resumes/{resume_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resume */
+        get: operations["get_resume_api_resumes__resume_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Resume */
+        delete: operations["delete_resume_api_resumes__resume_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jds/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Jd
+         * @description 粘贴 JD → 结构化关键点（预览用，不落库；保存走 POST /jds）。
+         */
+        post: operations["extract_jd_api_jds_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jds */
+        get: operations["list_jds_api_jds_get"];
+        put?: never;
+        /** Create Jd */
+        post: operations["create_jd_api_jds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jds/{jd_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Jd */
+        get: operations["get_jd_api_jds__jd_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Jd */
+        delete: operations["delete_jd_api_jds__jd_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -120,6 +212,101 @@ export interface components {
             /** Detail */
             detail?: string | null;
         };
+        /**
+         * JDBrief
+         * @description 列表项：不含正文（历史 JD 复选用）。
+         */
+        JDBrief: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Key Points */
+            key_points: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** JDCreateRequest */
+        JDCreateRequest: {
+            /** Title */
+            title: string;
+            /** Content */
+            content: string;
+            /** @description 可选：先经 /jds/extract 提取的结果；缺省时服务端自动提取 */
+            key_points?: components["schemas"]["JDKeyPoints"] | null;
+        };
+        /** JDDetail */
+        JDDetail: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Key Points */
+            key_points: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Content */
+            content: string;
+        };
+        /** JDExtractRequest */
+        JDExtractRequest: {
+            /**
+             * Content
+             * @description JD 原文
+             */
+            content: string;
+        };
+        /** JDExtractResponse */
+        JDExtractResponse: {
+            key_points: components["schemas"]["JDKeyPoints"];
+        };
+        /**
+         * JDKeyPoints
+         * @description JD 结构化关键点（LLM 提取结果，E8）。
+         */
+        JDKeyPoints: {
+            /**
+             * Position
+             * @description 岗位名称
+             * @default
+             */
+            position: string;
+            /**
+             * Responsibilities
+             * @description 核心职责
+             */
+            responsibilities?: string[];
+            /**
+             * Required Skills
+             * @description 必备技术栈/技能
+             */
+            required_skills?: string[];
+            /**
+             * Preferred Skills
+             * @description 加分项/优先技能
+             */
+            preferred_skills?: string[];
+            /**
+             * Experience Requirements
+             * @description 经验与学历要求
+             */
+            experience_requirements?: string[];
+            /**
+             * Soft Skills
+             * @description 软技能与素质要求
+             */
+            soft_skills?: string[];
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Username */
@@ -136,6 +323,66 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /**
+         * ResumeBrief
+         * @description 列表项：不含正文。
+         */
+        ResumeBrief: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ResumeCreateRequest */
+        ResumeCreateRequest: {
+            /**
+             * Title
+             * @description 可选标题；缺省取正文首个 H1
+             * @default
+             */
+            title: string;
+            /**
+             * Content
+             * @description Markdown 简历原文
+             */
+            content: string;
+            /**
+             * Format
+             * @description 简历格式
+             * @default markdown
+             * @constant
+             */
+            format: "markdown";
+        };
+        /** ResumeDetail */
+        ResumeDetail: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Content */
+            content: string;
         };
         /** TokenResponse */
         TokenResponse: {
@@ -264,6 +511,265 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    list_resumes_api_resumes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeBrief"][];
+                };
+            };
+        };
+    };
+    create_resume_api_resumes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_resume_api_resumes__resume_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_resume_api_resumes__resume_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_jd_api_jds_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JDExtractRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JDExtractResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jds_api_jds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JDBrief"][];
+                };
+            };
+        };
+    };
+    create_jd_api_jds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JDCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JDDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_jd_api_jds__jd_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jd_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JDDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_jd_api_jds__jd_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jd_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -3,6 +3,8 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { GuestOnly } from '@/components/auth/guest-only'
 import { RequireAuth } from '@/components/auth/require-auth'
 import { HomePage } from '@/pages/home'
+import { JdsPage } from '@/pages/jds'
+import { ResumesPage } from '@/pages/resumes'
 import { LoginPage } from '@/pages/login'
 import { RegisterPage } from '@/pages/register'
 
@@ -14,7 +16,11 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <RequireAuth />,
-        children: [{ index: true, Component: HomePage }],
+        children: [
+          { index: true, Component: HomePage },
+          { path: 'resumes', Component: ResumesPage },
+          { path: 'jds', Component: JdsPage },
+        ],
       },
       {
         element: <GuestOnly />,

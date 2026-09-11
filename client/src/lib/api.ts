@@ -82,3 +82,32 @@ export const authApi = {
   login: (data: LoginRequest) => api.post<TokenResponse>('/auth/login', data),
   me: () => api.get<UserResponse>('/users/me'),
 }
+
+// ── 简历接口（M2）──────────────────────────────────────────────
+
+export type ResumeBrief = components['schemas']['ResumeBrief']
+export type ResumeDetail = components['schemas']['ResumeDetail']
+export type ResumeCreateRequest = components['schemas']['ResumeCreateRequest']
+
+export const resumeApi = {
+  list: () => api.get<ResumeBrief[]>('/resumes'),
+  get: (id: number) => api.get<ResumeDetail>(`/resumes/${id}`),
+  create: (data: ResumeCreateRequest) => api.post<ResumeDetail>('/resumes', data),
+  remove: (id: number) => api.delete<void>(`/resumes/${id}`),
+}
+
+// ── JD 接口（M2）───────────────────────────────────────────────
+
+export type JDBrief = components['schemas']['JDBrief']
+export type JDDetail = components['schemas']['JDDetail']
+export type JDKeyPoints = components['schemas']['JDKeyPoints']
+
+export const jdApi = {
+  list: () => api.get<JDBrief[]>('/jds'),
+  get: (id: number) => api.get<JDDetail>(`/jds/${id}`),
+  extract: (content: string) =>
+    api.post<{ key_points: JDKeyPoints }>('/jds/extract', { content }),
+  create: (data: { title: string; content: string; key_points?: JDKeyPoints }) =>
+    api.post<JDDetail>('/jds', data),
+  remove: (id: number) => api.delete<void>(`/jds/${id}`),
+}

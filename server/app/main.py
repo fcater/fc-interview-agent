@@ -13,7 +13,7 @@ from loguru import logger
 from app.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.log import setup_logging
-from app.routers import auth, users
+from app.routers import auth, jds, resumes, users
 from app.schemas.health import HealthResponse
 
 setup_logging()
@@ -54,6 +54,8 @@ register_exception_handlers(app)
 # ── 业务路由（统一 /api 前缀，与 vite / nginx 反代对齐）───────────
 app.include_router(auth.router, prefix="/api")  # POST /api/auth/register、/api/auth/login
 app.include_router(users.router, prefix="/api")  # GET /api/users/me（受保护）
+app.include_router(resumes.router, prefix="/api")  # /api/resumes：简历 CRUD（M2）
+app.include_router(jds.router, prefix="/api")  # /api/jds：JD 提取与 CRUD（M2）
 
 # ── 健康检查 ─────────────────────────────────────────────────────────
 # 同时挂载 /health（后端验收入口）与 /api/health（前端 /api 代理链路验收）。

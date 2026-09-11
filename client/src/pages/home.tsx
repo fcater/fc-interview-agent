@@ -21,7 +21,7 @@ export function HomePage() {
       <section>
         <h1 className="text-2xl font-semibold tracking-tight">首页</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          M1 用户体系已就绪。后续里程碑将提供：简历管理、JD 管理、AI 模拟面试与面试复盘。
+          简历管理与 JD 管理已就绪（顶部导航进入）。后续里程碑将提供：知识库检索、AI 模拟面试与面试复盘。
         </p>
       </section>
 
