@@ -36,6 +36,10 @@ cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步的 P
 # 3. 初始化业务表（Alembic，幂等可重复执行）
 cd server && uv run alembic upgrade head
 
+# （可选）灌入演示/测试数据：liming（后端画像）/ wangfang（前端画像）两个账号 + 各自简历与 JD
+# 幂等可重复执行；--with-vectors 同步向量化（需本机 Ollama）；--clean 清理种子数据
+uv run python scripts/seed.py
+
 # 4. 一键启动后端 + 前端（POSIX 脚本，Linux / macOS / Windows Git Bash 通用；Ctrl+C 停止）
 ./dev.sh
 

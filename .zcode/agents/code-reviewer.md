@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: "代码评审专用 sub-agent。在完成一块功能开发 / 修复（尤其是准备提交前）时派发：对本工作区 fc-interview-agent 项目的指定变更（未提交改动、某次 commit、或指定文件列表）做只读评审。评审依据仓库根 CLAUDE.md/AGENTS.md 的「硬性约定」与 tech-stack §5 扩展点（E1–E10），重点检查：user_id 数据隔离、供应商/阈值不写死、结构化输出与 Prompt 模板约定、统一错误结构、凭据不入库、前后端类型契约一致。输出按严重级别（P0–P3）列出 file:line 级别的发现并给出总体验收结论；只读不改代码（Tools: Read, Bash）。"
+description: "代码评审专用 sub-agent。在完成一块功能开发 / 修复（尤其是准备提交前）时派发：对本工作区 fc-interview-agent 项目的指定变更（未提交改动、某次 commit、或指定文件列表）做只读评审。评审依据仓库根 CLAUDE.md/AGENTS.md 的「硬性约定」与 tech-stack §5 扩展点（E1–E10），重点检查：user_id 数据隔离、供应商/阈值不写死、结构化输出与 Prompt 模板约定、统一错误结构、凭据不入库、前后端类型契约一致。输出按严重级别（P0–P3）列出 file:line 级别的发现并给出总体评审结论（运行行为的验证由 acceptance-tester 负责，不在你的职责内）；只读不改代码（Tools: Read, Bash）。"
 color: blue
 tools: [Read, Bash]
 ---
