@@ -147,6 +147,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Knowledge
+         * @description 在当前用户的简历知识库中做语义检索（topK 与阈值走配置）。
+         */
+        post: operations["search_knowledge_api_knowledge_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -306,6 +326,33 @@ export interface components {
              * @description 软技能与素质要求
              */
             soft_skills?: string[];
+        };
+        /** KnowledgeSearchItem */
+        KnowledgeSearchItem: {
+            /** Content */
+            content: string;
+            /**
+             * Score
+             * @description cosine 距离，越小越相关
+             */
+            score: number;
+            /** Resume Id */
+            resume_id: number;
+            /** Title */
+            title: string;
+        };
+        /** KnowledgeSearchRequest */
+        KnowledgeSearchRequest: {
+            /**
+             * Query
+             * @description 检索问题
+             */
+            query: string;
+        };
+        /** KnowledgeSearchResponse */
+        KnowledgeSearchResponse: {
+            /** Results */
+            results: components["schemas"]["KnowledgeSearchItem"][];
         };
         /** LoginRequest */
         LoginRequest: {
@@ -762,6 +809,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_knowledge_api_knowledge_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSearchResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -37,7 +37,7 @@
 | 前端数据层 | TanStack Query + Zustand | 服务端状态 / 轻量 UI 状态分离 |
 | 前端 UI | Tailwind CSS 4 + shadcn/ui | 聊天界面 + 评分报告定制化需求多 |
 | 流式通道 | SSE（后端 `EventSourceResponse`） | 单向流式足够；无语音/视频，不上 WebSocket |
-| 部署形态 | Docker Compose（PG）+ 本地起服务 | 演示场景 |
+| 部署形态 | Docker Compose（PG，开发与分发同一套）+ 本地起服务 | 开发与演示场景 |
 
 ---
 
@@ -133,7 +133,7 @@ evaluate_answer ──(判定：追问)──► follow_up ──┘
 
 ### 2.8 业务数据库与 ORM
 
-- **PostgreSQL 16**（开发环境用本机 PostgreSQL，需启用 pgvector 扩展）：业务数据与向量同库同实例，部署最简。
+- **PostgreSQL 16**（开发环境用 docker compose 的 `pgvector/pgvector:pg16` 容器，镜像自带 pgvector，无需本机安装）：业务数据与向量同库同实例，部署最简。
 - **SQLAlchemy 2.0（async + asyncpg）+ Alembic**：业务表（user / resume / jd / interview_session / interview_qa / evaluation_report）自 MVP 起带 `user_id` 列并建索引；Alembic 只管业务表，向量表不纳入迁移。
 - 服务层统一从依赖注入的当前用户取 user_id，杜绝遗漏（§5-E7）。
 
@@ -208,7 +208,7 @@ fc-interview-agent/
 
 ### 4.4 本地开发环境
 
-- 本地开发直接使用**本机 PostgreSQL**（创建 `fc_interview` 库，M3 起启用 vector 扩展）；Docker 仅用于最终打包分发（§4.5），开发期不启动。
+- 本地开发使用 **docker compose 的 pgvector 容器**（根目录 `docker-compose.yml`，宿主机端口默认 5433，首次初始化自动创建 `fc_interview` 库与 vector 扩展）；M7 打包分发复用同一 compose 并扩展全栈编排（§4.5）。
 - 后端 `uv run uvicorn app.main:app`、前端 `pnpm dev`（根目录 `dev.sh` 一键启动两者，POSIX 脚本与 Docker 内环境一致，不依赖宿主操作系统）。
 - **本地开发**：`APP_LLM_MODE=local` 时接入本机 Ollama（对话 `qwen3:8b` + 嵌入 `bge-m3`），无 key 无外网跑通完整面试闭环（面试官与求职者两个方向均可演示）。
 

@@ -13,6 +13,7 @@ from app.core.db import get_db
 from app.core.exceptions import NotFoundError
 from app.knowledge.parsers import get_parser
 from app.knowledge.sanitizer import sanitize_text
+from app.knowledge.service import delete_resume_vectors, ingest_resume
 from app.models import Resume, User
 from app.schemas.resume import ResumeBrief, ResumeCreateRequest, ResumeDetail
 
@@ -42,7 +43,24 @@ async def create_resume(
     db.add(resume)
     await db.commit()
     await db.refresh(resume)
-    logger.info("简历入库 id={} user_id={} title={}", resume.id, user.id, resume.title)
+    # 切片 → 嵌入 → 向量入库；业务行已落库，向量化失败只告警不回滚（M4 起检索不到该简历）
+    # rollback 会把同会话所有对象（含 user）置过期，先捕获日志所需的纯值
+    resume_id = resume.id
+    user_id = user.id
+    title = resume.title
+    try:
+        resume.vector_ids = await ingest_resume(resume)
+        await db.commit()
+        # vector_ids 的 UPDATE 会置过期 server onupdate 字段（updated_at），
+        # 显式刷新避免响应序列化时同步上下文懒加载（MissingGreenlet）
+        await db.refresh(resume)
+    except Exception:
+        await db.rollback()
+        # rollback 置过期后直接访问属性会在 asyncpg 下触发同步 IO（MissingGreenlet），
+        # 刷新恢复 resume 供响应序列化；日志一律用上面捕获的纯值
+        await db.refresh(resume)
+        logger.exception("简历向量化失败 resume_id={}", resume_id)
+    logger.info("简历入库 id={} user_id={} title={}", resume_id, user_id, title)
     return resume
 
 
@@ -73,7 +91,11 @@ async def delete_resume(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     resume = await _get_owned_resume(resume_id, user, db)
+    # 同步清理向量（幂等；失败不阻断业务删除，残留切片因 userId/sourceId 仍不可跨用户检索）
+    try:
+        await delete_resume_vectors(resume.vector_ids)
+    except Exception:
+        logger.exception("简历向量清理失败 resume_id={}", resume_id)
     await db.delete(resume)
     await db.commit()
     logger.info("简历删除 id={} user_id={}", resume_id, user.id)
-    # TODO(M3)：删除简历时同步清理 PGVector 中的切片

@@ -1,7 +1,6 @@
-# 打包分发用 PostgreSQL（pgvector 镜像）——本地开发不使用 Docker，
-# 开发库建在本机 PostgreSQL 上（见 README「本地启动」）
+# 开发/演示数据库：PostgreSQL 16 + pgvector（镜像自带扩展，首次初始化自动建库 + vector 扩展）
 # 用法：cp .env.example .env 并修改密码 → docker compose up -d
-# 凭据从根目录 .env 注入（compose 自动读取），缺失即报错
+# 凭据从根目录 .env 注入（compose 自动读取），缺失即报错；server/.env 的 APP_DATABASE_URL 与此保持一致
 # M7 阶段将扩展为全栈编排（PG + server + client/nginx）
 services:
   postgres:

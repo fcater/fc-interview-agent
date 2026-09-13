@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     chat_max_retries: int = 1
 
     # ── Embedding（E3：切换模型必须保证维度一致） ─────────────────
-    # local：provider=ollama，bge-m3（1024 维）
-    # online：provider=openai 兼容端点（如 SiliconFlow 的 BAAI/bge-m3）
-    embedding_provider: str = "ollama"
+    # provider 留空时按运行模式推导（local→ollama，online→openai 兼容端点如 SiliconFlow）；
+    # 维度由 embedding_dimensions 锁定，与 PGVector 建表对齐——换模型必须同维度或重建向量集合
+    embedding_provider: str = ""
     embedding_model: str = "bge-m3"
     embedding_base_url: str = ""
     embedding_api_key: str = ""
@@ -63,7 +63,9 @@ class Settings(BaseSettings):
 
     # ── 知识库检索（E6：topK、相似度阈值、切片参数可配置） ────────
     rag_top_k: int = 4
-    rag_similarity_threshold: float = 0.35
+    # 语义：cosine 距离上限（≤阈值才返回）。经 bge-m3 中文实测校准：
+    # 相关片段 0.31–0.37，跨域无关 0.46+，远域 0.66+；取 0.42 兼顾召回与误杀
+    rag_similarity_threshold: float = 0.42
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
 

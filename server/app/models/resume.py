@@ -1,10 +1,11 @@
 """简历表（E7：自写入起携带 user_id）。
 
-M2 起：content 为原始 Markdown 文本，解析 + 脱敏后另存（迁移追加列），
-切片向量写入 PGVector（M3，不在 Alembic 管理范围内）。
+content 为解析 + 脱敏后的 Markdown；vector_ids 为 M3 切片向量 id
+（删除简历时据此同步清理 PGVector，向量表由 PGVector 自动建、不走 Alembic）。
 """
 
 from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, IdMixin, TimestampMixin
@@ -18,3 +19,4 @@ class Resume(Base, IdMixin, TimestampMixin):
     )
     title: Mapped[str] = mapped_column(String(128), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    vector_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)

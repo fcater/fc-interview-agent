@@ -23,15 +23,15 @@ fc-interview-agent/
 
 ## 本地启动
 
-前置：Python 3.12+（[uv](https://docs.astral.sh/uv/)）、Node 22 + [pnpm](https://pnpm.io/)、本机 PostgreSQL、[Ollama](https://ollama.com/)（`APP_LLM_MODE=local` 时需要，见下方「LLM 模式」）。
+前置：Python 3.12+（[uv](https://docs.astral.sh/uv/)）、Node 22 + [pnpm](https://pnpm.io/)、Docker（开发数据库用 pgvector 容器）、[Ollama](https://ollama.com/)（`APP_LLM_MODE=local` 时需要，见下方「LLM 模式」）。
 
 ```bash
-# 1. 数据库：在本机 PostgreSQL 上创建业务库 + 专用账号（开发不使用 Docker）
-psql -U postgres -c "CREATE ROLE fc_interview LOGIN PASSWORD '<你的密码>';"
-psql -U postgres -c "CREATE DATABASE fc_interview OWNER fc_interview;"
+# 1. 数据库：docker compose 启动 pgvector 容器（首次自动建库 + vector 扩展；宿主机端口 5433）
+cp .env.example .env                 # 修改 POSTGRES_PASSWORD
+docker compose up -d
 
 # 2. 配置环境变量（凭据一律走环境变量，仓库只提供 .env.example）
-cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步创建的账号密码
+cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步的 POSTGRES_PASSWORD（账号/端口见样例）
 
 # 3. 初始化业务表（Alembic，幂等可重复执行）
 cd server && uv run alembic upgrade head
@@ -43,14 +43,11 @@ cd server && uv run alembic upgrade head
 # 前端 http://localhost:5173（浏览器访问，/api 代理到后端）
 ```
 
-> 注意：M3（知识库 RAG）需要 **pgvector 扩展**，官方 PostgreSQL 安装默认不含 pgvector——需在 M3 前为本机 PG 安装对应版本（[pgvector Releases](https://github.com/pgvector/pgvector/releases) 按 PG 18 选择），随后执行：
-> `psql -U postgres -d fc_interview -c "CREATE EXTENSION vector;"`
-
 首次运行需先安装依赖：`cd server && uv sync`（Python 3.12 自动下载）、`cd client && pnpm install`。
 
 前端首页会请求后端 `/health` 展示服务状态（后端 / 数据库 / LLM 模式）。
 
-> Docker 仅用于最终打包分发（M7，根目录 docker-compose.yml 起 PG pgvector 镜像），本地开发无需启动。国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
+> 开发数据库即上述 pgvector 容器（M7 打包分发复用同一 compose，并扩展全栈编排）。国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
 > `docker pull docker.1ms.run/pgvector/pgvector:pg16 && docker tag docker.1ms.run/pgvector/pgvector:pg16 pgvector/pgvector:pg16`
 
 ## LLM 模式（local / online）
@@ -102,7 +99,7 @@ cd server && uv run alembic upgrade head
 | M0 | 工程骨架（server + client 初始化） | ✅ 已验收 |
 | M1 | 数据层 + 用户体系（注册登录、JWT、隔离） | ✅ 已验收 |
 | M2 | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | ✅ 已验收 |
-| M3 | 知识库 RAG（切片、嵌入、向量检索） | ⬜ |
+| M3 | 知识库 RAG（切片、嵌入、向量检索） | ✅ 已验收 |
 | M4 | AI 面试官核心闭环（LangGraph） | ⬜ |
 | M5 | 面试评估与复盘 | ⬜ |
 | M6 | AI 求职者（含预设答案匹配） | ⬜ |
