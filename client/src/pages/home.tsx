@@ -1,29 +1,102 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { api } from '@/lib/api'
+import { api, interviewApi, jdApi, resumeApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import type { components } from '@/api/schema'
 
 type HealthResponse = components['schemas']['HealthResponse']
 
-/** 首页：登录用户信息 + 服务状态（前端 → /api 代理 → 后端 /health 全链路） */
+/** 首页：开始模拟面试（选简历 + JD）+ 登录用户信息 + 服务状态 */
 export function HomePage() {
   const me = useCurrentUser()
+  const navigate = useNavigate()
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api.get<HealthResponse>('/health'),
   })
+
+  const resumes = useQuery({ queryKey: ['resumes'], queryFn: resumeApi.list })
+  const jds = useQuery({ queryKey: ['jds'], queryFn: jdApi.list })
+  const [resumeId, setResumeId] = useState<number | null>(null)
+  const [jdId, setJdId] = useState<number | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+
+  const startInterview = async () => {
+    if (!resumeId) return
+    setStarting(true)
+    setStartError(null)
+    try {
+      const session = await interviewApi.start({ resume_id: resumeId, jd_id: jdId })
+      void navigate(`/interviews/${session.id}`)
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : '创建面试会话失败')
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
       <section>
         <h1 className="text-2xl font-semibold tracking-tight">首页</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          简历管理与 JD 管理已就绪（顶部导航进入）。后续里程碑将提供：知识库检索、AI 模拟面试与面试复盘。
+          选择简历与岗位 JD，开始一场 AI 模拟面试（当前仅面试官模式，求职者模式后续提供）。
         </p>
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>开始模拟面试</CardTitle>
+          <CardDescription>
+            AI 面试官将基于所选简历与 JD 提问，可随时提前结束；结束后可查看收尾总结。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="text-sm font-medium">选择简历</span>
+              <select
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                value={resumeId ?? ''}
+                onChange={(e) => setResumeId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="" disabled>
+                  {resumes.isPending ? '加载中…' : '请选择简历'}
+                </option>
+                {resumes.data?.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-sm font-medium">选择 JD（可选）</span>
+              <select
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                value={jdId ?? ''}
+                onChange={(e) => setJdId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">不使用 JD</option>
+                {jds.data?.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {startError && <p className="text-sm text-destructive">{startError}</p>}
+          <Button onClick={() => void startInterview()} disabled={!resumeId || starting}>
+            {starting ? '正在创建…' : '开始面试'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

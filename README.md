@@ -58,10 +58,10 @@ uv run python scripts/seed.py
 
 `APP_LLM_MODE` 决定模型接入方式（不 mock 模型，两种模式都跑真实模型）：
 
-| 模式 | 说明 | 适用场景 |
-|---|---|---|
-| `local` | 本机 Ollama 小模型，无 key 无外网 | 本地开发（默认） |
-| `online` | OpenAI 兼容协议的在线模型 | 生产环境 |
+| 模式     | 说明                              | 适用场景         |
+| -------- | --------------------------------- | ---------------- |
+| `local`  | 本机 Ollama 小模型，无 key 无外网 | 本地开发（默认） |
+| `online` | OpenAI 兼容协议的在线模型         | 生产环境         |
 
 ### local（本机 Ollama，默认）
 
@@ -85,26 +85,26 @@ uv run python scripts/seed.py
 
 关键项：
 
-| 环境变量 | 说明 |
-|---|---|
-| `APP_LLM_MODE` | `local` = 本机 Ollama 小模型（开发默认，无 key 无外网）；`online` = 在线模型 |
-| `APP_DATABASE_URL` | PostgreSQL 连接串（**必填，无默认值**；凭据与根目录 `.env` 的 `POSTGRES_USER` / `POSTGRES_PASSWORD` 一致） |
-| `APP_CHAT_*` / `APP_OLLAMA_BASE_URL` | 对话模型接入（local：Ollama；online：OpenAI 兼容协议，配置化切换供应商） |
-| `APP_EMBEDDING_*` | Embedding 接入（local：Ollama bge-m3；online：OpenAI 兼容端点，如 SiliconFlow） |
-| `APP_JWT_*` | JWT 签发配置 |
-| `APP_INTERVIEW_MAX_QUESTIONS` 等 | 面试题数上限、追问轮数、RAG 阈值等行为参数 |
+| 环境变量                             | 说明                                                                                                       |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `APP_LLM_MODE`                       | `local` = 本机 Ollama 小模型（开发默认，无 key 无外网）；`online` = 在线模型                               |
+| `APP_DATABASE_URL`                   | PostgreSQL 连接串（**必填，无默认值**；凭据与根目录 `.env` 的 `POSTGRES_USER` / `POSTGRES_PASSWORD` 一致） |
+| `APP_CHAT_*` / `APP_OLLAMA_BASE_URL` | 对话模型接入（local：Ollama；online：OpenAI 兼容协议，配置化切换供应商）                                   |
+| `APP_EMBEDDING_*`                    | Embedding 接入（local：Ollama bge-m3；online：OpenAI 兼容端点，如 SiliconFlow）                            |
+| `APP_JWT_*`                          | JWT 签发配置                                                                                               |
+| `APP_INTERVIEW_MAX_QUESTIONS` 等     | 面试题数上限、追问轮数、RAG 阈值等行为参数                                                                 |
 
 前端类型契约由 `pnpm gen:api` 从后端 OpenAPI 生成（需后端运行中），产出 `client/src/api/schema.d.ts`。
 
 ## 开发进度
 
-| 阶段 | 内容 | 状态 |
-|---|---|---|
-| M0 | 工程骨架（server + client 初始化） | ✅ 已验收 |
-| M1 | 数据层 + 用户体系（注册登录、JWT、隔离） | ✅ 已验收 |
-| M2 | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | ✅ 已验收 |
-| M3 | 知识库 RAG（切片、嵌入、向量检索） | ✅ 已验收 |
-| M4 | AI 面试官核心闭环（LangGraph） | ⬜ |
-| M5 | 面试评估与复盘 | ⬜ |
-| M6 | AI 求职者（含预设答案匹配） | ⬜ |
-| M7 | 部署与收尾 | ⬜ |
+| 阶段 | 内容                                        | 状态      |
+| ---- | ------------------------------------------- | --------- |
+| M0   | 工程骨架（server + client 初始化）          | ✅ 已验收 |
+| M1   | 数据层 + 用户体系（注册登录、JWT、隔离）    | ✅ 已验收 |
+| M2   | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | ✅ 已验收 |
+| M3   | 知识库 RAG（切片、嵌入、向量检索）          | ✅ 已验收 |
+| M4   | AI 面试官核心闭环（LangGraph）              | ✅ 已验收 |
+| M5   | 面试评估与复盘                              | ⬜        |
+| M6   | AI 求职者（含预设答案匹配）                 | ⬜        |
+| M7   | 部署与收尾                                  | ⬜        |

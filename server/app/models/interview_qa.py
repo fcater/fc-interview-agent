@@ -26,6 +26,8 @@ class InterviewQA(Base, IdMixin, TimestampMixin):
     question_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 判答简评（M4 结构化输出落库；M5 回看/评分依据），主问题未答时为空
+    assessment: Mapped[str | None] = mapped_column(Text, nullable=True)
     follow_up_round: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )

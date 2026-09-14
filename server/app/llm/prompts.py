@@ -6,6 +6,7 @@
 
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 from jinja2 import Environment, StrictUndefined, TemplateNotFound
 
@@ -29,6 +30,6 @@ def load_template(name: str):
     return _env.from_string(path.read_text(encoding="utf-8"))
 
 
-def render_prompt(name: str, **variables: str) -> str:
+def render_prompt(name: str, **variables: Any) -> str:
     """渲染模板；未提供的变量因 StrictUndefined 直接抛错。"""
     return load_template(name).render(**variables)

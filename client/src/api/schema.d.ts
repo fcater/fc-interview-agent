@@ -167,6 +167,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Interview
+         * @description 创建面试会话（校验简历/JD 归属；返回会话信息，前端跳面试页开首题流）。
+         */
+        post: operations["start_interview_api_interviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interviews/{session_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Snapshot
+         * @description 会话快照：刷新/重连后重建视图（含是否需要开流生成首题的判定）。
+         */
+        get: operations["get_snapshot_api_interviews__session_id__snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interviews/{session_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stream First Question
+         * @description SSE：生成首题（仅新会话；已推进过的会话返回 done 事件供前端走快照）。
+         */
+        post: operations["stream_first_question_api_interviews__session_id__stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interviews/{session_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Answer
+         * @description SSE：提交回答 → 判答（评估事件）→ 追问/下一题（流式）。
+         */
+        post: operations["submit_answer_api_interviews__session_id__answers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interviews/{session_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Interview
+         * @description SSE：提前结束（随时生效）→ 流式收尾总结。
+         */
+        post: operations["finish_interview_api_interviews__session_id__finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -231,6 +331,105 @@ export interface components {
             database?: ("up" | "down") | null;
             /** Detail */
             detail?: string | null;
+        };
+        /**
+         * InterviewAnswerRequest
+         * @description 提交当前问题的回答（提交后进入判答，走 SSE 流式返回评估与下一问题）。
+         */
+        InterviewAnswerRequest: {
+            /** Content */
+            content: string;
+        };
+        /**
+         * InterviewQABrief
+         * @description 单条问答明细（含追问轮次，回看与快照共用）。
+         */
+        InterviewQABrief: {
+            /** Question Index */
+            question_index: number;
+            /** Question Type */
+            question_type?: string | null;
+            /** Question */
+            question: string;
+            /** Answer */
+            answer?: string | null;
+            /**
+             * Follow Up Round
+             * @default 0
+             */
+            follow_up_round: number;
+            /** Assessment */
+            assessment?: string | null;
+        };
+        /**
+         * InterviewSessionBrief
+         * @description 面试会话简要信息（列表/快照内嵌）。
+         */
+        InterviewSessionBrief: {
+            /** Id */
+            id: number;
+            /** Resume Id */
+            resume_id: number | null;
+            /** Jd Id */
+            jd_id: number | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** Question Count */
+            question_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * InterviewSnapshotResponse
+         * @description 面试会话快照：前端刷新/重连后重建视图的唯一数据源。
+         *
+         *     needs_stream=True 表示当前问题尚未生成（新会话或中断在生成中），
+         *     前端应立即打开流式端点获取首题；否则直接展示 current_question 并可作答。
+         */
+        InterviewSnapshotResponse: {
+            session: components["schemas"]["InterviewSessionBrief"];
+            /** Phase */
+            phase: string;
+            /**
+             * Question Index
+             * @default 0
+             */
+            question_index: number;
+            /**
+             * Follow Up Round
+             * @default 0
+             */
+            follow_up_round: number;
+            /** Max Questions */
+            max_questions: number;
+            /** Current Question */
+            current_question?: string | null;
+            /** Question Type */
+            question_type?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Needs Stream
+             * @default false
+             */
+            needs_stream: boolean;
+            /** Qa History */
+            qa_history?: components["schemas"]["InterviewQABrief"][];
+        };
+        /**
+         * InterviewStartRequest
+         * @description 开始面试：选择简历与 JD（均须属于当前用户，否则 404）。
+         */
+        InterviewStartRequest: {
+            /** Resume Id */
+            resume_id: number;
+            /** Jd Id */
+            jd_id?: number | null;
         };
         /**
          * JDBrief
@@ -841,6 +1040,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_interview_api_interviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewSessionBrief"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_snapshot_api_interviews__session_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_first_question_api_interviews__session_id__stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_answer_api_interviews__session_id__answers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_interview_api_interviews__session_id__finish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             /** @description Validation Error */

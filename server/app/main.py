@@ -4,24 +4,45 @@
 """
 
 import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 import asyncpg
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from loguru import logger
 
+from app.agents.interviewer import build_interviewer_graph
 from app.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.log import setup_logging
-from app.routers import auth, jds, knowledge, resumes, users
+from app.routers import auth, interviews, jds, knowledge, resumes, users
 from app.schemas.health import HealthResponse
 
 setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """LangGraph 会话检查点（SqliteSaver，thread_id = 面试会话 id）随应用生命周期管理。
+
+    检查点库路径走配置（data/ 已 gitignore）；图编译一次复用，
+    节点内业务无关的 per-request 资源（如用户绑定的 RAG 检索）经 config 注入。
+    """
+    # SQLite 需要父目录已存在（首次运行/新环境时自动创建）
+    Path(settings.checkpoint_db_path).parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string(settings.checkpoint_db_path) as checkpointer:
+        app.state.checkpointer = checkpointer
+        app.state.interviewer_graph = build_interviewer_graph(checkpointer)
+        yield
+
 
 app = FastAPI(
     title="AI 面试模拟 Agent API",
     description="基于「个人简历 + 目标岗位 JD」的中文模拟面试工具（面试官 / 求职者双角色）。",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -57,6 +78,7 @@ app.include_router(users.router, prefix="/api")  # GET /api/users/me（受保护
 app.include_router(resumes.router, prefix="/api")  # /api/resumes：简历 CRUD（M2）
 app.include_router(jds.router, prefix="/api")  # /api/jds：JD 提取与 CRUD（M2）
 app.include_router(knowledge.router, prefix="/api")  # /api/knowledge：语义检索（M3）
+app.include_router(interviews.router, prefix="/api")  # /api/interviews：面试官会话（M4）
 
 # ── 健康检查 ─────────────────────────────────────────────────────────
 # 同时挂载 /health（后端验收入口）与 /api/health（前端 /api 代理链路验收）。
