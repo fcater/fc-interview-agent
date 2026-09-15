@@ -15,10 +15,28 @@ fc-interview-agent/
 ├── server/              # Python 后端（uv 工程：FastAPI + LangChain + LangGraph）
 │   ├── app/             # main.py / config.py + core/models/schemas/routers/services/agents/knowledge/llm/prompts
 │   ├── migrations/      # Alembic（仅业务表，M1 起）
+│   ├── Dockerfile       # uv 多阶段构建 → slim 镜像（启动时自动执行迁移）
 │   └── .env.example     # 环境变量样例
 ├── client/              # React 前端（pnpm 工程：Vite + TS + Tailwind 4 + shadcn/ui）
-├── docker-compose.yml   # 本地基础设施：PostgreSQL（pgvector 镜像）
+│   ├── Dockerfile       # vite build → nginx 托管 + /api 反代（SSE 关闭代理缓冲）
+│   ├── nginx.conf       # 生产反代配置（gzip / SPA 回退 / SSE 长超时）
+│   └── src/             # pages / components / stores / lib（API 封装）等
+├── docker-compose.yml   # 开发：仅 PG；分发：全栈编排（PG + server + client）
 └── docker/init/         # PG 初始化脚本（vector 扩展）
+```
+
+## 架构
+
+```text
+浏览器
+  └─ client 容器（nginx：静态托管 + /api 反代，SSE 关闭代理缓冲即时下发）
+       └─ server 容器（FastAPI：REST + SSE；两条独立 LangGraph 图：面试官 / 求职者）
+            ├─ PostgreSQL 容器（pgvector：业务表 + 简历/预设向量，同库同实例）
+            │    └─ 多用户隔离：业务表 user_id 过滤 + 向量检索 userId 元数据过滤（E7）
+            ├─ LangGraph 会话检查点（SqliteSaver，thread_id = 会话 id，随 server 容器卷持久化）
+            └─ 模型接入（E2/E3 配置化，业务代码不出现具体模型名）
+                 ├─ local：宿主机 Ollama（容器经 host.docker.internal 访问）
+                 └─ online：OpenAI 兼容端点
 ```
 
 ## 本地启动
@@ -26,12 +44,12 @@ fc-interview-agent/
 前置：Python 3.12+（[uv](https://docs.astral.sh/uv/)）、Node 22 + [pnpm](https://pnpm.io/)、Docker（开发数据库用 pgvector 容器）、[Ollama](https://ollama.com/)（`APP_LLM_MODE=local` 时需要，见下方「LLM 模式」）。
 
 ```bash
-# 1. 数据库：docker compose 启动 pgvector 容器（首次自动建库 + vector 扩展；宿主机端口 5433）
+# 1. 环境变量（两份都先建好，compose 解析时需要；凭据一律走环境变量，仓库只提供 .env.example）
 cp .env.example .env                 # 修改 POSTGRES_PASSWORD
-docker compose up -d
-
-# 2. 配置环境变量（凭据一律走环境变量，仓库只提供 .env.example）
 cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步的 POSTGRES_PASSWORD（账号/端口见样例）
+
+# 2. 数据库：docker compose 仅启动 pgvector 容器（开发模式不构建服务镜像；首次自动建库 + vector 扩展，宿主机端口 5433）
+docker compose up -d postgres
 
 # 3. 初始化业务表（Alembic，幂等可重复执行）
 cd server && uv run alembic upgrade head
@@ -51,8 +69,46 @@ uv run python scripts/seed.py
 
 前端首页会请求后端 `/health` 展示服务状态（后端 / 数据库 / LLM 模式）。
 
-> 开发数据库即上述 pgvector 容器（M7 打包分发复用同一 compose，并扩展全栈编排）。国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
+> 开发数据库即上述 pgvector 容器（分发部署复用同一 compose 并扩展全栈编排，见下方「Docker 全栈部署」）。国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
 > `docker pull docker.1ms.run/pgvector/pgvector:pg16 && docker tag docker.1ms.run/pgvector/pgvector:pg16 pgvector/pgvector:pg16`
+
+## Docker 全栈部署
+
+一键启动全栈（PG + server + client/nginx），适合演示与分发。
+
+前置：Docker；`APP_LLM_MODE=local` 时另需本机 [Ollama](https://ollama.com/) 已启动并拉取模型（见下方「LLM 模式」）。
+
+```bash
+# 1. 准备两份环境变量（凭据不入库，样例均在仓库）
+cp .env.example .env                 # 修改 POSTGRES_PASSWORD
+cp server/.env.example server/.env   # LLM 接入按需修改；APP_DATABASE_URL 无需改（全栈编排自动覆盖为 compose 内网地址）
+
+# 2. 一键构建并启动全栈（server 启动时自动执行 alembic 迁移，幂等）
+docker compose up -d --build
+
+# 3. 访问
+# 前端 http://localhost:8080   （nginx 托管，/api 自动反代到后端）
+# 后端 http://localhost:8000/docs（OpenAPI 页面，可直连调试）
+```
+
+说明：
+
+- **local 模式**：server 容器经 `host.docker.internal:11434` 访问宿主机 Ollama（compose 已配 `extra_hosts`，Linux 亦兼容）；Ollama 不在本机时在根目录 `.env` 中设 `APP_OLLAMA_BASE_URL`。
+- **online 模式**：在 `server/.env` 中切换 `APP_LLM_MODE=online` 并填写供应商配置后，`docker compose up -d --build server` 重建生效。
+- **离线演示**：local 模式全程无外网依赖（模型推理与向量嵌入均走本机 Ollama），适合现场演示。
+- 会话检查点（SQLite）持久化于 `server-data` 卷，容器重建后会话可恢复。
+- （可选）灌入演示数据（liming / wangfang 两个画像账号）：`docker compose exec server python scripts/seed.py --with-vectors`（需宿主机 Ollama 在线）；`--clean` 清理。
+
+```bash
+# 停止（数据卷保留）
+docker compose down
+# 停止并删除数据卷（业务数据与向量全部清空，慎用）
+docker compose down -v
+```
+
+> Windows 排障：启动 client 时报 `ports are not available`，是 Hyper-V/WinNAT 动态保留端口段占用了 8080（常见于重启后）。
+> 在根目录 `.env` 中设 `CLIENT_PORT=8180`（或其他未保留端口）后重新 `docker compose up -d`；保留段可用
+> `netsh interface ipv4 show excludedportrange protocol=tcp` 查看。server 端口同理（`SERVER_PORT`）。
 
 ## LLM 模式（local / online）
 
@@ -107,4 +163,4 @@ uv run python scripts/seed.py
 | M4   | AI 面试官核心闭环（LangGraph）              | ✅ 已验收 |
 | M5   | 面试评估与复盘                              | ✅ 已验收 |
 | M6   | AI 求职者（含预设答案匹配）                 | ✅ 已验收 |
-| M7   | 部署与收尾                                  | ⬜        |
+| M7   | 部署与收尾                                  | ✅ 已验收 |

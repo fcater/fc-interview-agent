@@ -1,0 +1,9 @@
+# 凭据不入镜像（环境变量由 docker-compose 注入）
+.env
+# 本地产物
+.venv/
+data/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/

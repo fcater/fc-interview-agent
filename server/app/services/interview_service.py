@@ -70,7 +70,8 @@ def _build_initial_state(session: InterviewSession, resume: Resume, jd: JD | Non
         "follow_up_point": "",
         "resume_context": resume.content,
         "jd_key_points": _format_jd_key_points(jd),
-        "jd_skills": list((jd.key_points or {}).get("required_skills") or []),
+        # jd 可为 None（建会话时 JD 选填），直接解引用会 AttributeError 致首题 500（M7 验收发现）
+        "jd_skills": list((jd.key_points or {}).get("required_skills") or []) if jd else [],
         "asked_questions": [],
         "abort_requested": False,
         "summary": "",

@@ -20,9 +20,11 @@ class Settings(BaseSettings):
     )
 
     # ── 运行模式 ──────────────────────────────────────────────────
+    # 注意：字段名不能带 app_ 前缀（env_prefix="APP_" 会叠加成 APP_APP_LLM_MODE，
+    # 导致环境变量 APP_LLM_MODE 永不生效——M7 验收实测踩坑）
     # local：本地开发，接入本机 Ollama 小模型（无 key 无外网）
     # online：生产环境，接入在线模型（OpenAI 兼容端点，需要 API key）
-    app_llm_mode: Literal["local", "online"] = "local"
+    llm_mode: Literal["local", "online"] = "local"
 
     # ── 数据库（业务表 + 向量表同库同实例） ───────────────────────
     # 必填：凭据走环境变量，无默认值（缺失时启动即报错，见 server/.env.example）
@@ -48,9 +50,11 @@ class Settings(BaseSettings):
     chat_max_retries: int = 1
     # ollama 专属推理参数：上下文窗口必须 ≥ 最长 prompt（评分报告 ~3.5K tokens），
     # 否则触发 context shift——该环境下 llama.cpp 滑窗后会陷入生成死循环并占满
-    # 推理 slot（实测踩坑）；num_predict 为单次生成上限，兜底防无限循环
+    # 推理 slot（实测踩坑）；num_predict 为单次生成上限，兜底防无限循环。
+    # 注意 qwen3 系列思维链 token 计入上限：2048 会把长 prompt 结构化输出截为空
+    # （M7 验收实测评分报告需 2576 tokens），故取 4096 兼顾兜底与完整生成
     chat_num_ctx: int = 8192
-    chat_num_predict: int = 2048
+    chat_num_predict: int = 4096
 
     # ── Embedding（E3：切换模型必须保证维度一致） ─────────────────
     # provider 留空时按运行模式推导（local→ollama，online→openai 兼容端点如 SiliconFlow）；

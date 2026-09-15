@@ -1,0 +1,10 @@
+# 本地构建产物与依赖不入镜像
+node_modules/
+dist/
+*.log
+# 环境变量文件防御性排除（VITE_* 会被内嵌进构建产物）
+.env*
+# VCS 与 IDE
+.git/
+.idea/
+.vscode/

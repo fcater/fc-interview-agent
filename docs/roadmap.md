@@ -229,6 +229,14 @@
 - 新环境按 README 步骤可一键启动全栈并完成演示闭环：注册 → 上传简历 → 录入 JD → 面试 → 评分 → 复盘。
 - 本地模式（local）与在线模式（online）均验证通过。
 
+> 验收留痕（2026-09-15，全栈容器化运行，API 级取证；local=qwen3:4b + bge-m3，online=OpenAI 兼容协议 + 本机 Ollama /v1 替身端点）：
+> 1. 一键全栈：`docker compose up -d --build` 起 PG(pgvector:pg16) + server + client/nginx 三容器，healthcheck 全绿；server 启动自动执行 alembic 迁移（幂等）；nginx 静态托管 200、/api 反代 200，首题 SSE 流穿反代完整到达（35 事件含 token/phase/done，`proxy_buffering off` 生效）。
+> 2. local 模式闭环：注册 → 简历 → JD（LLM 提取关键点）→ 面试作答 → 结束 → 评分报告（overall=79，4 维含评语）→ 复盘 GET 一致；「无 JD 建会话」在 M7 验收中发现 jd None 解引用 500，修复后复验通过（建会话 201 + 首题流正常）。
+> 3. online 模式闭环：按硬性约定「验收不得依赖真实 key」，以本机 Ollama `/v1` 作 OpenAI 兼容替身端点（dummy key）验证 online 代码路径——JD 结构化提取、判答结构化输出、finish 中文 summary、评分报告（overall=74，技术能力 75 / 项目理解 70 / 表达能力 80 / 岗位匹配度 70，含评语）全链路成功，报告补生成幂等（409 生成中 ×3 → 200）。
+> 4. 验收实测修复（均落实后复验）：config `app_llm_mode` 与 `env_prefix=APP_` 叠加致 `APP_LLM_MODE` 永不生效（改名 `llm_mode`）；`num_predict=2048` 截断评分报告长结构化输出（→4096）；无 JD 会话 `jd.key_points` 解引用 500；nginx upstream 静态写死在容器重建后 502（改 `resolver` 动态解析）；compose `env_file` 缺失启动失败（`required: false`）；Windows Hyper-V/WinNAT 保留端口段占用 8080（`CLIENT_PORT` 可配 + README 排障说明）。
+> 5. 体验细节（任务 4）无新增改动：加载态、空态、错误提示与 LLM 失败重试兜底（R4）、SSE 断连提示（R5）已在 M4–M6 实现并随各阶段验收（前端零变更）。
+> 6. 遗留：M6 求职者模式 RAG 阈值（0.42）分档校准观察项沿用（E6 已可配置，超出 MVP 验收范围）；替身端点运行时上下文 4096 小于 ollama 直连的 8192，评分报告仍完整生成，不影响 online 路径结论。
+
 ---
 
 ## 3. 阶段边界（MVP 不实现）

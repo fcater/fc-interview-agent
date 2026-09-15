@@ -16,7 +16,7 @@ from app.config import settings
 def get_chat_model() -> BaseChatModel:
     """构造对话模型（进程内单例；切换供应商改配置即可，代码不变）。"""
     provider = settings.chat_provider or (
-        "ollama" if settings.app_llm_mode == "local" else "openai"
+        "ollama" if settings.llm_mode == "local" else "openai"
     )
     if provider == "ollama":
         model = init_chat_model(

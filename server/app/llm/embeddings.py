@@ -17,7 +17,7 @@ from app.config import settings
 def get_embeddings() -> Embeddings:
     """构造 Embedding 模型（进程内单例）。"""
     provider = settings.embedding_provider or (
-        "ollama" if settings.app_llm_mode == "local" else "openai"
+        "ollama" if settings.llm_mode == "local" else "openai"
     )
     if provider == "ollama":
         return init_embeddings(

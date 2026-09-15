@@ -112,13 +112,13 @@ async def health() -> HealthResponse:
     except Exception as exc:  # 健康检查自身执行异常：结构化返回 error，不抛裸 500
         return HealthResponse(
             status="error",
-            app_llm_mode=settings.app_llm_mode,
+            app_llm_mode=settings.llm_mode,
             database=None,
             detail=f"健康检查执行失败：{exc}",
         )
     return HealthResponse(
         status="ok" if db_up else "degraded",
-        app_llm_mode=settings.app_llm_mode,
+        app_llm_mode=settings.llm_mode,
         database="up" if db_up else "down",
     )
 

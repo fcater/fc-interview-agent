@@ -1,11 +1,13 @@
-# 开发/演示数据库：PostgreSQL 16 + pgvector（镜像自带扩展，首次初始化自动建库 + vector 扩展）
-# 用法：cp .env.example .env 并修改密码 → docker compose up -d
-# 凭据从根目录 .env 注入（compose 自动读取），缺失即报错；server/.env 的 APP_DATABASE_URL 与此保持一致
-# M7 阶段将扩展为全栈编排（PG + server + client/nginx）
+# 全栈编排（M7）：PG（业务 + pgvector）+ server（FastAPI）+ client（nginx 反代 /api）
+# 用法：cp .env.example .env 并修改密码 → cp server/.env.example server/.env 配置 LLM → docker compose up -d --build
+# 凭据从根目录 .env 注入（compose 自动读取），缺失即报错；开发模式仅起数据库：docker compose up -d postgres
+# server 容器数据库固定走 compose 内网（environment 覆盖 server/.env 中的本机地址）；
+# LLM 接入等其余配置沿用 server/.env（env_file 注入）——local 模式经 host.docker.internal 访问宿主机 Ollama
 services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: fc-interview-pg
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?请在根目录 .env 中配置 POSTGRES_USER（参考 .env.example）}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在根目录 .env 中配置 POSTGRES_PASSWORD（参考 .env.example）}
@@ -18,10 +20,55 @@ services:
       # 首次初始化时自动创建 vector 扩展
       - ./docker/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d fc_interview"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fc_interview}"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  server:
+    build: ./server
+    container_name: fc-interview-server
+    # LLM 接入 / JWT / RAG 阈值等配置沿用 server/.env（需先从 .env.example 复制创建）；
+    # required: false——开发模式仅起 postgres 时该文件可缺失，不影响 compose 配置解析
+    env_file:
+      - path: server/.env
+        required: false
+    environment:
+      # 全栈编排下数据库固定走 compose 内网 postgres 服务（覆盖 env_file 中的本机地址）
+      APP_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # local 模式接入宿主机 Ollama：容器内 localhost 不可达，经 host.docker.internal 转发
+      # （如需覆盖可写进根目录 .env：APP_OLLAMA_BASE_URL=http://xxx:11434）
+      APP_OLLAMA_BASE_URL: ${APP_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      # Linux 宿主机兼容（Windows / macOS 的 Docker Desktop 自带该域名解析）
+      - "host.docker.internal:host-gateway"
+    ports:
+      # 宿主机直连后端可选（/docs OpenAPI 页面、Postman 调试）
+      - "${SERVER_PORT:-8000}:8000"
+    volumes:
+      # LangGraph 会话检查点（SQLite，data/ 已 .dockerignore）持久化
+      - server-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  client:
+    build: ./client
+    container_name: fc-interview-client
+    ports:
+      # 浏览器访问入口（nginx 托管前端并反代 /api）
+      - "${CLIENT_PORT:-8080}:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  server-data:
