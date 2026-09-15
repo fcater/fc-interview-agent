@@ -192,4 +192,13 @@ export async function streamSSE(
 export const interviewApi = {
   start: (data: InterviewStartRequest) => api.post<InterviewSessionBrief>('/interviews', data),
   snapshot: (id: number) => api.get<InterviewSnapshotResponse>(`/interviews/${id}/snapshot`),
+  list: () => api.get<InterviewRecordBrief[]>('/interviews'),
+  getReport: (id: number) => api.get<ReportResponse>(`/interviews/${id}/report`),
+  generateReport: (id: number) => api.post<ReportResponse>(`/interviews/${id}/report`),
 }
+
+// ── 评分报告接口（M5）─────────────────────────────────────────
+
+export type ReportResponse = components['schemas']['ReportResponse']
+export type InterviewRecordBrief = components['schemas']['InterviewRecordBrief']
+export type InterviewReport = components['schemas']['InterviewReport']

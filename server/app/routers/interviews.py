@@ -1,4 +1,4 @@
-"""面试路由（M4）：开始 / 快照恢复 / 三个 SSE 流式端点（首题、作答、提前结束）。
+"""面试路由（M4/M5）：会话 CRUD、快照恢复、三个 SSE 流式端点、评分报告。
 
 SSE 用 fastapi.sse（POST 可携带 JWT；EventSource 不支持自定义 Header，
 前端走 fetch ReadableStream 自行解析，见 tech-stack §3）。流式端点为
@@ -20,7 +20,8 @@ from app.schemas.interview import (
     InterviewSnapshotResponse,
     InterviewStartRequest,
 )
-from app.services import interview_service
+from app.schemas.report import InterviewRecordBrief, ReportResponse
+from app.services import interview_service, report_service
 from app.services.interview_service import StreamAction
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
@@ -64,6 +65,34 @@ async def start_interview(
     """创建面试会话（校验简历/JD 归属；返回会话信息，前端跳面试页开首题流）。"""
     session = await interview_service.start_interview(db, user, payload)
     return InterviewSessionBrief.model_validate(session)
+
+
+@router.get("", response_model=list[InterviewRecordBrief])
+async def list_interviews(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[InterviewRecordBrief]:
+    """历史面试列表（当前用户，含简历/JD 标题与综合评分，时间倒序）。"""
+    return await report_service.list_interviews(db, user)
+
+
+@router.get("/{session_id}/report", response_model=ReportResponse)
+async def get_report(
+    session: InterviewSession = Depends(_owned_session),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    """评分报告（未生成/他人会话一律 404，前端轮询此端点等待异步生成完成）。"""
+    return ReportResponse.model_validate(await report_service.get_report(db, user, session.id))
+
+
+@router.post("/{session_id}/report", response_model=ReportResponse)
+async def generate_report(
+    session: InterviewSession = Depends(_owned_session),
+    db: AsyncSession = Depends(get_db),
+) -> ReportResponse:
+    """幂等补生成评分报告（已有直接返回；未结束/生成中 409；同步生成约需 1 分钟）。"""
+    return ReportResponse.model_validate(await report_service.ensure_report(db, session))
 
 
 @router.get("/{session_id}/snapshot", response_model=InterviewSnapshotResponse)

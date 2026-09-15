@@ -28,6 +28,7 @@ from app.schemas.interview import (
     PhaseEvent,
     TokenEvent,
 )
+from app.services import report_service
 
 # ── 会话启动与上下文构造 ─────────────────────────────────────────
 
@@ -220,10 +221,12 @@ async def _question_count(db: AsyncSession, session: InterviewSession) -> int:
 
 
 async def _finalize(db: AsyncSession, session: InterviewSession, *, aborted: bool) -> str:
-    """收尾落库：状态与主问题数；返回最终 status。"""
+    """收尾落库：状态与主问题数，并调度评分报告后台生成（M5）；返回最终 status。"""
     session.status = "aborted" if aborted else "completed"
     session.question_count = await _question_count(db, session)
     await db.commit()
+    # 报告生成是终局后处理：异步调度（done 立即返回），失败由 POST /report 补生成兜底
+    report_service.schedule_report_task(session.id)
     logger.info(
         "面试会话结束 id={} status={} question_count={}",
         session.id,

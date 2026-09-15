@@ -1,10 +1,13 @@
 """面试评估报告表（M5 写入）。
 
-scores 为结构化评分（综合 / 技术能力 / 项目理解 / 表达能力 / 岗位匹配度），
-结构由 M5 的 Pydantic schema 固定；summary / suggestions 为文本总结。
+report 为 InterviewReport 的全量 JSON（综合分 + 维度列表 + 问题总结 +
+改进建议）；维度名与标准由 rubric 模板驱动（E5），schema 结构固定（E8）。
+overall_score 单列冗余，供列表页排序/展示，免解析 JSON。
 """
 
-from sqlalchemy import ForeignKey, Text
+from typing import Any
+
+from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,6 +26,5 @@ class EvaluationReport(Base, IdMixin, TimestampMixin):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    summary: Mapped[str] = mapped_column(Text, nullable=False)
-    suggestions: Mapped[str] = mapped_column(Text, nullable=False)
+    overall_score: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

@@ -41,6 +41,9 @@ export function AppLayout() {
                 <NavLink to="/jds" className={({ isActive }) => navLinkClass(isActive)}>
                   JD
                 </NavLink>
+                <NavLink to="/interviews" className={({ isActive }) => navLinkClass(isActive)}>
+                  面试记录
+                </NavLink>
               </>
             )}
             {token ? (

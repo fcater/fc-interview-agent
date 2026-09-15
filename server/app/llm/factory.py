@@ -23,7 +23,13 @@ def get_chat_model() -> BaseChatModel:
             f"ollama:{settings.chat_model}",
             base_url=settings.ollama_base_url,
             temperature=settings.chat_temperature,
-            timeout=settings.chat_timeout_seconds,
+            # ChatOllama 无 timeout 字段（langchain extra=allow 会静默吞掉），
+            # 超时须经 client_kwargs 传入底层 ollama/httpx 客户端，否则
+            # Ollama 侧排队/断连时请求无限挂起（后台报告任务实测踩坑）
+            client_kwargs={"timeout": settings.chat_timeout_seconds},
+            # 上下文窗口与生成上限：防长 prompt 触发 context shift 死循环
+            num_ctx=settings.chat_num_ctx,
+            num_predict=settings.chat_num_predict,
         )
     else:
         # openai 及其他 OpenAI 兼容端点（DeepSeek / Qwen / SiliconFlow / vLLM 等）

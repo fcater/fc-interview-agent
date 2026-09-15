@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Loader2, Send } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, Loader2, RefreshCw, Send } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
+import { ReportView } from '@/components/report/report-view'
 import { ApiError, interviewApi, streamSSE } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { questionTypeLabel, useInterviewStore } from '@/stores/interview-store'
@@ -113,7 +114,13 @@ export function InterviewPage() {
   const finished = store.status !== 'in_progress'
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col gap-4">
+    <div
+      className={cn(
+        'mx-auto max-w-3xl',
+        // 进行中：固定视口高度聊天布局；结束后：文档流滚动（聊天 + 复盘报告）
+        finished ? 'space-y-4' : 'flex h-[calc(100vh-8rem)] flex-col gap-4',
+      )}
+    >
       {/* 顶栏：进度 + 提前结束 */}
       <div className="flex items-center justify-between gap-4">
         <div className="text-sm text-muted-foreground">
@@ -137,7 +144,7 @@ export function InterviewPage() {
       </div>
 
       {/* 消息区 */}
-      <Card className="flex min-h-0 flex-1 flex-col">
+      <Card className={cn('flex flex-col', finished ? 'h-[55vh] shrink-0' : 'min-h-0 flex-1')}>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           {store.messages.map((msg, i) => (
             <MessageBubble key={i} message={msg} />
@@ -176,37 +183,108 @@ export function InterviewPage() {
         </div>
       )}
 
-      {/* 回答输入区 */}
-      <div className="flex items-end gap-2">
-        <Textarea
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              submitAnswer()
-            }
-          }}
-          placeholder={
-            finished
-              ? '面试已结束'
-              : store.awaitingAnswer
+      {/* 结束后：评分报告区（进行中该区域不存在，输入区占位） */}
+      {finished ? (
+        <ReportSection sessionId={sessionId} />
+      ) : (
+        <div className="flex items-end gap-2">
+          <Textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submitAnswer()
+              }
+            }}
+            placeholder={
+              store.awaitingAnswer
                 ? '输入你的回答…（Enter 发送，Shift+Enter 换行）'
                 : '等待面试官…'
-          }
-          disabled={finished || store.streaming || !store.awaitingAnswer}
-          className="min-h-20 resize-none"
-        />
-        <Button
-          size="icon"
-          className="size-10 shrink-0"
-          disabled={finished || store.streaming || !store.awaitingAnswer || !answer.trim()}
-          onClick={submitAnswer}
-        >
-          <Send className="size-4" />
-        </Button>
-      </div>
+            }
+            disabled={store.streaming || !store.awaitingAnswer}
+            className="min-h-20 resize-none"
+          />
+          <Button
+            size="icon"
+            className="size-10 shrink-0"
+            disabled={store.streaming || !store.awaitingAnswer || !answer.trim()}
+            onClick={submitAnswer}
+          >
+            <Send className="size-4" />
+          </Button>
+        </div>
+      )}
     </div>
+  )
+}
+
+/** 评分报告区（M5）：报告未生成时轮询（后台任务 30-60s），失败可手动补生成 */
+function ReportSection({ sessionId }: { sessionId: number }) {
+  const queryClient = useQueryClient()
+
+  const report = useQuery({
+    queryKey: ['report', sessionId],
+    queryFn: () => interviewApi.getReport(sessionId),
+    retry: false,
+    // 404（尚未生成）时每 3s 轮询直到拿到报告；其他错误不轮询
+    refetchInterval: (query) => {
+      const err = query.state.error
+      if (query.state.data) return false
+      return err instanceof ApiError && err.status === 404 ? 3000 : false
+    },
+  })
+
+  // 幂等补生成：后台任务丢失/旧会话回填入口（同步等待 LLM，约 30-60s）
+  const regenerate = useMutation({
+    mutationFn: () => interviewApi.generateReport(sessionId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['report', sessionId], data)
+      // 列表页"报告中"徽章已过期，刷新
+      void queryClient.invalidateQueries({ queryKey: ['interviews'] })
+    },
+  })
+
+  const notFound = report.error instanceof ApiError && report.error.status === 404
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>评分报告</CardTitle>
+        <CardDescription>基于简历、岗位要求与全部问答自动生成</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {report.data && <ReportView report={report.data.report} />}
+        {!report.data && (report.isPending || notFound) && (
+          <div className="flex items-center gap-3 py-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            评分报告生成中，约需 1 分钟…
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={regenerate.isPending}
+              onClick={() => regenerate.mutate()}
+            >
+              <RefreshCw />
+              手动生成
+            </Button>
+          </div>
+        )}
+        {!report.data &&
+          report.error &&
+          !notFound && (
+            <div className="space-y-2 py-2">
+              <p className="text-sm text-destructive">{report.error.message}</p>
+              <Button size="sm" variant="outline" onClick={() => report.refetch()}>
+                重试
+              </Button>
+            </div>
+          )}
+        {regenerate.isError && (
+          <p className="mt-2 text-sm text-destructive">{regenerate.error.message}</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

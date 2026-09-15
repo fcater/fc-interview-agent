@@ -174,13 +174,41 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Interviews
+         * @description 历史面试列表（当前用户，含简历/JD 标题与综合评分，时间倒序）。
+         */
+        get: operations["list_interviews_api_interviews_get"];
         put?: never;
         /**
          * Start Interview
          * @description 创建面试会话（校验简历/JD 归属；返回会话信息，前端跳面试页开首题流）。
          */
         post: operations["start_interview_api_interviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/interviews/{session_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report
+         * @description 评分报告（未生成/他人会话一律 404，前端轮询此端点等待异步生成完成）。
+         */
+        get: operations["get_report_api_interviews__session_id__report_get"];
+        put?: never;
+        /**
+         * Generate Report
+         * @description 幂等补生成评分报告（已有直接返回；未结束/生成中 409；同步生成约需 1 分钟）。
+         */
+        post: operations["generate_report_api_interviews__session_id__report_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -360,6 +388,60 @@ export interface components {
             follow_up_round: number;
             /** Assessment */
             assessment?: string | null;
+        };
+        /**
+         * InterviewRecordBrief
+         * @description 历史面试列表项：会话概要 + 简历/JD 标题 + 综合评分。
+         */
+        InterviewRecordBrief: {
+            /** Id */
+            id: number;
+            /** Status */
+            status: string;
+            /** Role */
+            role: string;
+            /** Question Count */
+            question_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Resume Title */
+            resume_title?: string | null;
+            /** Jd Title */
+            jd_title?: string | null;
+            /** Overall Score */
+            overall_score?: number | null;
+        };
+        /**
+         * InterviewReport
+         * @description 评分报告：综合评分 + 分维度得分 + 主要问题 + 改进建议。
+         *
+         *     dimensions 为列表结构：维度个数与名称由 rubric 模板决定（默认 4 维），
+         *     schema 本身固定，保证格式稳定（roadmap M5 验收 ①③）。
+         */
+        InterviewReport: {
+            /**
+             * Overall Score
+             * @description 综合评分，0-100 整数
+             */
+            overall_score: number;
+            /**
+             * Dimensions
+             * @description 各评分维度得分与评语，维度以评分标准为准
+             */
+            dimensions: components["schemas"]["ReportDimension"][];
+            /**
+             * Main Problems
+             * @description 主要问题总结，最多 3 条，每条一句中文，指向具体回答
+             */
+            main_problems: string[];
+            /**
+             * Improvements
+             * @description 改进建议，最多 3 条，每条一句中文，可操作
+             */
+            improvements: string[];
         };
         /**
          * InterviewSessionBrief
@@ -569,6 +651,45 @@ export interface components {
             username: string;
             /** Password */
             password: string;
+        };
+        /**
+         * ReportDimension
+         * @description 单个评分维度（名称随 rubric 模板变化，分数 0-100）。
+         */
+        ReportDimension: {
+            /**
+             * Name
+             * @description 维度名称，与评分标准中的维度一致
+             */
+            name: string;
+            /**
+             * Score
+             * @description 该维度得分，0-100 整数
+             */
+            score: number;
+            /**
+             * Comment
+             * @description 该维度一两句中文评语，结合回答中的具体表现
+             */
+            comment: string;
+        };
+        /**
+         * ReportResponse
+         * @description 评分报告响应（evaluation_reports 行序列化；report 为全量报告结构）。
+         */
+        ReportResponse: {
+            /** Id */
+            id: number;
+            /** Session Id */
+            session_id: number;
+            /** Overall Score */
+            overall_score: number;
+            report: components["schemas"]["InterviewReport"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * ResumeBrief
@@ -1053,6 +1174,26 @@ export interface operations {
             };
         };
     };
+    list_interviews_api_interviews_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewRecordBrief"][];
+                };
+            };
+        };
+    };
     start_interview_api_interviews_post: {
         parameters: {
             query?: never;
@@ -1073,6 +1214,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterviewSessionBrief"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_api_interviews__session_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_report_api_interviews__session_id__report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1134,7 +1337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1169,7 +1372,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1200,7 +1403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/event-stream": string;
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Validation Error */

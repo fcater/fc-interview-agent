@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     chat_extract_temperature: float = 0.1
     chat_timeout_seconds: int = 60
     chat_max_retries: int = 1
+    # ollama 专属推理参数：上下文窗口必须 ≥ 最长 prompt（评分报告 ~3.5K tokens），
+    # 否则触发 context shift——该环境下 llama.cpp 滑窗后会陷入生成死循环并占满
+    # 推理 slot（实测踩坑）；num_predict 为单次生成上限，兜底防无限循环
+    chat_num_ctx: int = 8192
+    chat_num_predict: int = 2048
 
     # ── Embedding（E3：切换模型必须保证维度一致） ─────────────────
     # provider 留空时按运行模式推导（local→ollama，online→openai 兼容端点如 SiliconFlow）；
@@ -60,6 +65,9 @@ class Settings(BaseSettings):
     interview_max_questions: int = 8
     interview_max_follow_ups: int = 2
     interview_memory_window: int = 20  # 对话历史窗口（消息条数）
+
+    # ── 评分报告（M5：本地小模型结构化输出约 95% 成功率，重试兜底） ──
+    report_max_retries: int = 2
 
     # ── 知识库检索（E6：topK、相似度阈值、切片参数可配置） ────────
     rag_top_k: int = 4

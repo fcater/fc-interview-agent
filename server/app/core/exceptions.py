@@ -41,3 +41,10 @@ class NotFoundError(AppError):
 
     code = "not_found"
     status_code = 404
+
+
+class ReportGenerationError(AppError):
+    """评分报告生成失败（本地模型结构化输出重试后仍失败）。"""
+
+    code = "report_generation_failed"
+    status_code = 500
