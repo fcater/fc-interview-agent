@@ -138,11 +138,12 @@ export type InterviewStreamEvent =
  * POST SSE 流式请求：fetch ReadableStream + 手动解析 text/event-stream。
  * EventSource 不支持自定义 Header（无法带 JWT），故手写解析（tech-stack §3）。
  * onEvent 按事件回调；中断（组件卸载/用户取消）由调用方传入 AbortSignal。
+ * 事件类型由调用方泛型指定（面试官 InterviewStreamEvent / 求职者 CandidateStreamEvent）。
  */
-export async function streamSSE(
+export async function streamSSE<T = InterviewStreamEvent>(
   path: string,
   body: unknown | undefined,
-  onEvent: (event: InterviewStreamEvent) => void,
+  onEvent: (event: T) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' })
@@ -183,7 +184,7 @@ export async function streamSSE(
       for (const line of raw.split('\n')) {
         if (!line.startsWith('data:')) continue
         const data = line.slice(5).trim()
-        if (data) onEvent(JSON.parse(data) as InterviewStreamEvent)
+        if (data) onEvent(JSON.parse(data) as T)
       }
     }
   }
@@ -202,3 +203,59 @@ export const interviewApi = {
 export type ReportResponse = components['schemas']['ReportResponse']
 export type InterviewRecordBrief = components['schemas']['InterviewRecordBrief']
 export type InterviewReport = components['schemas']['InterviewReport']
+
+// ── 求职者模式接口（M6）───────────────────────────────────────
+
+export type CandidateSnapshotResponse = components['schemas']['CandidateSnapshotResponse']
+export type CandidateStartRequest = components['schemas']['CandidateStartRequest']
+
+/**
+ * 点评结构化模型（后端 schemas/candidate.py 的 AnswerCritique）：
+ * 仅作为 SSE phase 事件内嵌数据出现，不经 OpenAPI 暴露，故手写对齐（同 InterviewStreamEvent 先例）。
+ */
+export type AnswerCritique = {
+  strengths: string[]
+  weaknesses: string[]
+  suggestions: string[]
+}
+
+/** 求职者 SSE 事件（后端 Token/Done/Error 复用 + schemas/candidate.py 的 CandidatePhaseEvent） */
+export type CandidateStreamEvent =
+  | { type: 'token'; content: string; node?: string | null }
+  | {
+      type: 'phase'
+      phase: 'answered' | 'critiqued'
+      question_index: number
+      question?: string | null
+      answer?: string | null
+      used_preset?: boolean | null
+      critique?: AnswerCritique | null
+    }
+  | { type: 'done'; status: string; question_count: number; summary?: string | null }
+  | { type: 'error'; message: string }
+
+/** 求职者动作到 SSE 端点路径的映射（start 即初始化/断连恢复端点 stream） */
+export const candidateStreamPath: Record<'start' | 'ask' | 'critique' | 'finish', string> = {
+  start: 'stream',
+  ask: 'questions',
+  critique: 'critique',
+  finish: 'finish',
+}
+
+export const candidateApi = {
+  start: (data: CandidateStartRequest) =>
+    api.post<InterviewSessionBrief>('/candidate/sessions', data),
+  snapshot: (id: number) => api.get<CandidateSnapshotResponse>(`/candidate/sessions/${id}/snapshot`),
+}
+
+// ── 预设答案接口（M6，E6）─────────────────────────────────────
+
+export type PresetBrief = components['schemas']['PresetBrief']
+export type PresetUpsertRequest = components['schemas']['PresetUpsertRequest']
+
+export const presetApi = {
+  list: () => api.get<PresetBrief[]>('/presets'),
+  create: (data: PresetUpsertRequest) => api.post<PresetBrief>('/presets', data),
+  update: (id: number, data: PresetUpsertRequest) => api.put<PresetBrief>(`/presets/${id}`, data),
+  remove: (id: number) => api.delete<void>(`/presets/${id}`),
+}

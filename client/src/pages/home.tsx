@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { api, interviewApi, jdApi, resumeApi } from '@/lib/api'
+import { api, candidateApi, interviewApi, jdApi, resumeApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import type { components } from '@/api/schema'
@@ -25,6 +25,8 @@ export function HomePage() {
   const [jdId, setJdId] = useState<number | null>(null)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [practicing, setPracticing] = useState(false)
+  const [practiceError, setPracticeError] = useState<string | null>(null)
 
   const startInterview = async () => {
     if (!resumeId) return
@@ -40,26 +42,92 @@ export function HomePage() {
     }
   }
 
+  /** 求职者模式：AI 以所选简历主人口吻应答（仅选简历，无 JD） */
+  const startPractice = async () => {
+    if (!resumeId) return
+    setPracticing(true)
+    setPracticeError(null)
+    try {
+      const session = await candidateApi.start({ resume_id: resumeId })
+      void navigate(`/candidate/sessions/${session.id}`)
+    } catch (err) {
+      setPracticeError(err instanceof Error ? err.message : '创建求职者练习会话失败')
+    } finally {
+      setPracticing(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <section>
         <h1 className="text-2xl font-semibold tracking-tight">首页</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          选择简历与岗位 JD，开始一场 AI 模拟面试（当前仅面试官模式，求职者模式后续提供）。
+          选择简历开始：面试官模式由 AI 向你提问，求职者模式由你向 AI 提问。
         </p>
       </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>开始模拟面试</CardTitle>
-          <CardDescription>
-            AI 面试官将基于所选简历与 JD 提问，可随时提前结束；结束后可查看收尾总结。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>面试官模式</CardTitle>
+            <CardDescription>
+              AI 面试官基于所选简历与 JD 提问并评分，可随时提前结束；结束后生成复盘报告。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div className="grid gap-4">
+                <label className="space-y-1.5">
+                  <span className="text-sm font-medium">选择简历</span>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={resumeId ?? ''}
+                    onChange={(e) => setResumeId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="" disabled>
+                      {resumes.isPending ? '加载中…' : '请选择简历'}
+                    </option>
+                    {resumes.data?.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-sm font-medium">选择 JD（可选）</span>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={jdId ?? ''}
+                    onChange={(e) => setJdId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">不使用 JD</option>
+                    {jds.data?.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {startError && <p className="text-sm text-destructive">{startError}</p>}
+              <Button onClick={() => void startInterview()} disabled={!resumeId || starting}>
+                {starting ? '正在创建…' : '开始面试'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>求职者模式</CardTitle>
+            <CardDescription>
+              你扮演面试官向 AI 提问，AI 以简历主人口吻回答（不虚构）；支持追问、即时点评与预设标准答案。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <label className="space-y-1.5">
-              <span className="text-sm font-medium">选择简历</span>
+              <span className="text-sm font-medium">选择简历（AI 将以该简历身份应答）</span>
               <select
                 className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                 value={resumeId ?? ''}
@@ -75,28 +143,13 @@ export function HomePage() {
                 ))}
               </select>
             </label>
-            <label className="space-y-1.5">
-              <span className="text-sm font-medium">选择 JD（可选）</span>
-              <select
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                value={jdId ?? ''}
-                onChange={(e) => setJdId(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">不使用 JD</option>
-                {jds.data?.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {startError && <p className="text-sm text-destructive">{startError}</p>}
-          <Button onClick={() => void startInterview()} disabled={!resumeId || starting}>
-            {starting ? '正在创建…' : '开始面试'}
-          </Button>
-        </CardContent>
-      </Card>
+            {practiceError && <p className="text-sm text-destructive">{practiceError}</p>}
+            <Button variant="secondary" onClick={() => void startPractice()} disabled={!resumeId || practicing}>
+              {practicing ? '正在创建…' : '开始练习'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>

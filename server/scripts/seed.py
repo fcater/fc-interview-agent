@@ -21,8 +21,13 @@ from sqlalchemy import delete, select
 
 from app.core.db import SessionLocal
 from app.core.security import hash_password
-from app.knowledge.service import delete_resume_vectors, ingest_resume
-from app.models import JD, Resume, User
+from app.knowledge.service import (
+    delete_preset_vectors,
+    delete_resume_vectors,
+    ingest_preset_answer,
+    ingest_resume,
+)
+from app.models import JD, PresetAnswer, Resume, User
 from app.schemas.jd import JDKeyPoints
 
 SEED_PASSWORD = "seed12345"
@@ -30,7 +35,7 @@ SEED_PASSWORD = "seed12345"
 
 @dataclasses.dataclass
 class SeedPersona:
-    """一位种子用户的完整画像：用户名 + 该用户专属的简历与 JD。"""
+    """一位种子用户的完整画像：用户名 + 该用户专属的简历、JD 与预设答案。"""
 
     username: str
     resume_title: str
@@ -38,6 +43,8 @@ class SeedPersona:
     jd_title: str
     jd_content: str
     jd_key_points: JDKeyPoints
+    # M6 预设标准答案：(question, answer, tags)，按 question 判重
+    presets: list[tuple[str, str, list[str]]]
 
 
 _LIMING_JD_KP = JDKeyPoints(
@@ -112,6 +119,22 @@ SEED_PERSONAS = [
 - 具备良好的问题定位能力与团队协作意识。
 """,
         jd_key_points=_LIMING_JD_KP,
+        presets=[
+            (
+                "介绍一下你做过的最有技术挑战的项目",
+                "最有挑战的是消息推送平台：我自研了长连接网关，单机承载 20 万连接，"
+                "丢包率低于 0.01%。核心难点在连接握手与心跳的内存模型设计，"
+                "以及大促期间百万级推送的削峰调度。",
+                ["项目", "挑战", "亮点"],
+            ),
+            (
+                "你如何做线上慢查询优化",
+                "我按「先定位、再治理」的思路：通过慢日志与执行计划定位劣化 SQL，"
+                "再结合索引重建与分库分表治理。在电商订单中台推动订单库拆为 16 个分片，"
+                "慢查询率下降 90%，大促峰值支撑 3 万 QPS。",
+                ["MySQL", "慢查询", "优化"],
+            ),
+        ],
     ),
     SeedPersona(
         username="wangfang",
@@ -158,6 +181,22 @@ SEED_PERSONAS = [
 - 具备良好的跨团队沟通能力与技术方案输出能力。
 """,
         jd_key_points=_WANGFANG_JD_KP,
+        presets=[
+            (
+                "介绍一下你的首屏性能优化经验",
+                "在电商主站前端架构升级中，我通过构建产物瘦身、路由级代码分割与"
+                "关键资源预加载，把首屏时间从 3.2 秒降到 1.4 秒，构建产物体积压缩 40%。"
+                "配套搭建了性能监控看板持续跟踪回归。",
+                ["性能", "首屏", "优化"],
+            ),
+            (
+                "说说你的组件库建设经验",
+                "我主导过设计系统与组件库建设，沉淀 60+ 通用组件、覆盖 5 条业务线。"
+                "工程上用 Storybook 驱动组件开发与测试，配合语义化版本与变更日志，"
+                "让业务方升级成本可控。",
+                ["组件库", "设计系统"],
+            ),
+        ],
     ),
 ]
 
@@ -210,6 +249,24 @@ async def seed_user(session, persona: SeedPersona, *, with_vectors: bool) -> lis
         await session.flush()
         actions.append(f"  JD「{persona.jd_title}」id={jd.id}")
 
+    # M6 预设标准答案：按 question 判重，向量化与简历同规则（--with-vectors 补齐）
+    for question, answer, tags in persona.presets:
+        preset = (
+            await session.scalars(
+                select(PresetAnswer).where(
+                    PresetAnswer.user_id == user.id, PresetAnswer.question == question
+                )
+            )
+        ).first()
+        if preset is None:
+            preset = PresetAnswer(user_id=user.id, question=question, answer=answer, tags=tags)
+            session.add(preset)
+            await session.flush()
+            actions.append(f"  预设答案「{question[:12]}…」id={preset.id}")
+        if with_vectors and not preset.vector_ids:
+            preset.vector_ids = await ingest_preset_answer(preset)
+            actions.append(f"  预设答案「{question[:12]}…」已向量化")
+
     await session.commit()
     return actions
 
@@ -231,12 +288,18 @@ async def clean_users(session) -> int:
         select(Resume.vector_ids).where(Resume.user_id.in_(user_ids))
     ):
         stale_vector_ids.extend(row or [])
+    for row in await session.scalars(
+        select(PresetAnswer.vector_ids).where(PresetAnswer.user_id.in_(user_ids))
+    ):
+        stale_vector_ids.extend(row or [])
     await session.execute(delete(Resume).where(Resume.user_id.in_(user_ids)))
     await session.execute(delete(JD).where(JD.user_id.in_(user_ids)))
+    await session.execute(delete(PresetAnswer).where(PresetAnswer.user_id.in_(user_ids)))
     await session.execute(delete(User).where(User.id.in_(user_ids)))
     await session.commit()
     if stale_vector_ids:
         await delete_resume_vectors(stale_vector_ids)
+        await delete_preset_vectors(stale_vector_ids)
     return len(users)
 
 

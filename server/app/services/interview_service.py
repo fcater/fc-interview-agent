@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from langchain_core.messages import AIMessageChunk
 from langgraph.types import Command
 from loguru import logger
 from sqlalchemy import distinct, func, select
@@ -315,6 +316,10 @@ async def stream_events(
         ):
             if mode == "messages":
                 chunk, metadata = payload
+                # 只外发 LLM token：节点写入的完整消息（如回答 HumanMessage）也会被
+                # messages 模式发出，不过滤会在评估期间把用户回答回显进 AI 气泡
+                if not isinstance(chunk, AIMessageChunk):
+                    continue
                 node = metadata.get("langgraph_node")
                 # 判答为结构化输出（JSON token），不外发；前端以 assessed 事件获取简评
                 if node == "evaluate_answer":

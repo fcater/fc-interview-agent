@@ -24,6 +24,9 @@ Thumbs.db
 # --- ZCode 会话产物（agents 定义需入库，plans 为会话级临时产物） ---
 .zcode/plans/
 
+# --- Trae IDE 会话产物 ---
+.trae/
+
 # --- 日志 ---
 *.log
 

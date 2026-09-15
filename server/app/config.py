@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
 
+    # ── 预设答案匹配（M6，E6：「标签 + 相似度阈值」双重命中） ─────
+    # 命中 = 距离 ≤ 阈值 且（无标签 或 任一标签为提问文本子串）；取 top1
+    preset_top_k: int = 1
+    # 预设答案为逐字命中的标准内容，阈值比简历切片更严（宁缺毋滥，未命中自由发挥）
+    preset_similarity_threshold: float = 0.38
+
     # ── LangGraph 会话检查点（SqliteSaver，thread_id = 面试会话 id） ──
     checkpoint_db_path: str = "data/checkpoints.sqlite"
 

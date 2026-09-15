@@ -55,3 +55,37 @@ class InterviewState(TypedDict):
     # 用户主动结束标记（wait_answer 的 resume 值为 {"action": "finish"} 时置位）
     abort_requested: bool
     summary: str  # 收尾总结文本（summarize 写入，随 done 事件下发）
+
+
+class CandidateState(TypedDict):
+    """求职者图状态（M6，tech-stack §2.4）：用户提问 → RAG → AI 作答 → 追问循环。
+
+    与 InterviewState 同范式（messages/phase/纯函数节点）但字段独立：
+    用户是提问方，无题数/追问轮次上限；检索结果与点评随 checkpoint 持久化。
+    """
+
+    # 全量对话历史（用户提问 / AI 回答 / 点评），checkpoint 持久化
+    messages: Annotated[list[AnyMessage], add_messages]
+    phase: Phase
+
+    # 进度：question_index 从 1 起编号（每轮用户提问 +1，与 interview_qa 对齐）
+    question_index: int
+
+    # 当前轮：用户提问（wait_question 写入）与 AI 回答（generate_answer 写入）
+    current_question: str
+    last_answer: str
+
+    # 会话级固定上下文（start 时构造，全程不变）
+    resume_context: str  # 脱敏简历全文
+
+    # 本轮检索结果（retrieve 写入，generate_answer 消费）
+    rag_context: str  # 简历切片文本（未命中为空）
+    preset_answer: str  # 命中的预设标准答案全文（未命中为空）
+    preset_used: bool
+
+    # 动作标记（wait_question 按 resume 值写入，每轮提问分支必须显式重置）
+    critique_requested: bool
+    finish_requested: bool
+
+    # 最近一次点评（critique 节点写入，dict：strengths/weaknesses/suggestions）
+    critique: dict | None

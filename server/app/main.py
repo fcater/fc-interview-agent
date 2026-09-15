@@ -13,11 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from loguru import logger
 
+from app.agents.candidate import build_candidate_graph
 from app.agents.interviewer import build_interviewer_graph
 from app.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.log import setup_logging
-from app.routers import auth, interviews, jds, knowledge, resumes, users
+from app.routers import auth, candidate, interviews, jds, knowledge, presets, resumes, users
 from app.schemas.health import HealthResponse
 
 setup_logging()
@@ -35,6 +36,8 @@ async def lifespan(app: FastAPI):
     async with AsyncSqliteSaver.from_conn_string(settings.checkpoint_db_path) as checkpointer:
         app.state.checkpointer = checkpointer
         app.state.interviewer_graph = build_interviewer_graph(checkpointer)
+        # 求职者图（M6）独立编译：同一 checkpointer，thread_id 各自为会话 id
+        app.state.candidate_graph = build_candidate_graph(checkpointer)
         yield
 
 
@@ -79,6 +82,8 @@ app.include_router(resumes.router, prefix="/api")  # /api/resumes：简历 CRUD�
 app.include_router(jds.router, prefix="/api")  # /api/jds：JD 提取与 CRUD（M2）
 app.include_router(knowledge.router, prefix="/api")  # /api/knowledge：语义检索（M3）
 app.include_router(interviews.router, prefix="/api")  # /api/interviews：面试官会话（M4）
+app.include_router(candidate.router, prefix="/api")  # /api/candidate：求职者练习（M6）
+app.include_router(presets.router, prefix="/api")  # /api/presets：预设标准答案（M6）
 
 # ── 健康检查 ─────────────────────────────────────────────────────────
 # 同时挂载 /health（后端验收入口）与 /api/health（前端 /api 代理链路验收）。

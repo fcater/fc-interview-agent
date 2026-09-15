@@ -5,6 +5,7 @@ import { RequireAuth } from '@/components/auth/require-auth'
 import { HomePage } from '@/pages/home'
 import { InterviewPage } from '@/pages/interview'
 import { InterviewsPage } from '@/pages/interviews'
+import { CandidatePage } from '@/pages/candidate'
 import { JdsPage } from '@/pages/jds'
 import { ResumesPage } from '@/pages/resumes'
 import { LoginPage } from '@/pages/login'
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
           { path: 'jds', Component: JdsPage },
           { path: 'interviews', Component: InterviewsPage },
           { path: 'interviews/:id', Component: InterviewPage },
+          { path: 'candidate/sessions/:id', Component: CandidatePage },
         ],
       },
       {

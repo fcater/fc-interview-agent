@@ -45,7 +45,7 @@ export function InterviewsPage() {
             {records.data?.map((r) => (
               <li key={r.id}>
                 <Link
-                  to={`/interviews/${r.id}`}
+                  to={r.role === 'interviewer' ? `/interviews/${r.id}` : `/candidate/sessions/${r.id}`}
                   className="flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-accent/50"
                 >
                   <ClipboardList className="size-4 shrink-0 text-muted-foreground" />
@@ -70,7 +70,10 @@ export function InterviewsPage() {
                     <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
                       {STATUS_LABEL[r.status] ?? r.status}
                     </span>
-                    <ScoreBadge score={r.overall_score} />
+                    {/* 求职者模式无评分报告语义：综合分列显示「—」 */}
+                    {r.role === 'interviewer' ? <ScoreBadge score={r.overall_score} /> : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </div>
                 </Link>
               </li>
