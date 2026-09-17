@@ -9,13 +9,17 @@
 默认不向量化：保证无 Ollama/无外网时也能一键准备业务数据；向量数据可随时
 通过 --with-vectors 单独补齐（M3 起检索依赖它，M4 联调建议开启）。
 
-两位种子用户分属后端/前端画像（liming / wangfang），简历与 JD 内容互不重叠：
+简历正文不内联在本文件，改为读同目录 resume_*.md：篇幅按真实简历的体量
+（2–3 千字）维护，便于直接比对切片效果；本文件只留画像配置。
+
+四位种子用户分属前端/后端/全栈/AI Agent 画像，简历与 JD 内容互不重叠：
 多用户隔离验收靠这一语义判据——按一方的技术栈检索不应命中另一方的切片。
 """
 
 import argparse
 import asyncio
 import dataclasses
+from pathlib import Path
 
 from sqlalchemy import delete, select
 
@@ -32,6 +36,13 @@ from app.schemas.jd import JDKeyPoints
 
 SEED_PASSWORD = "seed12345"
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def _load_resume(filename: str) -> str:
+    """读同目录下的简历正文：内容与代码解耦，换简历不必改 seed.py。"""
+    return (_SCRIPT_DIR / filename).read_text(encoding="utf-8")
+
 
 @dataclasses.dataclass
 class SeedPersona:
@@ -47,125 +58,63 @@ class SeedPersona:
     presets: list[tuple[str, str, list[str]]]
 
 
-_LIMING_JD_KP = JDKeyPoints(
-    position="高级后端工程师（Go/Python）",
-    responsibilities=[
-        "负责核心业务微服务的设计、开发与稳定性保障",
-        "参与高并发场景下的性能优化与容量规划",
-        "推动团队工程质量提升，沉淀通用组件与最佳实践",
-    ],
-    required_skills=["Go 或 Python", "MySQL", "Redis", "Kafka"],
-    preferred_skills=["大规模分布式系统", "Kubernetes"],
-    experience_requirements=["本科及以上学历", "5 年以上后端开发经验"],
-    soft_skills=["问题定位能力", "团队协作意识"],
-)
-
-_WANGFANG_JD_KP = JDKeyPoints(
+_CHENXIAO_JD_KP = JDKeyPoints(
     position="高级前端工程师（React）",
     responsibilities=[
         "负责核心业务前端应用的架构设计与性能优化",
         "建设与维护组件库、设计系统等前端基础设施",
         "推动前端工程化与质量保障体系落地",
     ],
-    required_skills=["React", "TypeScript"],
-    preferred_skills=["Next.js", "首屏性能优化"],
-    experience_requirements=["本科及以上学历", "4 年以上前端开发经验"],
-    soft_skills=["跨团队沟通能力", "技术方案输出能力"],
+    required_skills=["React", "TypeScript", "前端工程化"],
+    preferred_skills=["数据可视化", "构建工具优化", "Monorepo"],
+    experience_requirements=["本科及以上学历", "5 年以上前端开发经验"],
+    soft_skills=["技术方案输出能力", "跨团队沟通能力"],
+)
+
+_ZHOUHANG_JD_KP = JDKeyPoints(
+    position="高级后端工程师（Go）",
+    responsibilities=[
+        "负责交易、订单核心链路的架构设计与稳定性保障",
+        "主导高并发场景下的性能优化与容量规划",
+        "推动服务治理与可观测性体系建设",
+    ],
+    required_skills=["Go", "MySQL", "Redis", "Kafka"],
+    preferred_skills=["分库分表", "分布式事务", "Kubernetes", "Flink"],
+    experience_requirements=["本科及以上学历", "5 年以上后端开发经验"],
+    soft_skills=["线上问题定位能力", "技术方案输出能力"],
+)
+
+_LINYUE_JD_KP = JDKeyPoints(
+    position="全栈开发工程师（TypeScript/Node）",
+    responsibilities=[
+        "负责 SaaS 产品前后端全链路研发与交付",
+        "参与多租户架构、权限体系与计费模块设计",
+        "推动 CI/CD 与研发交付效率提升",
+    ],
+    required_skills=["TypeScript", "Node.js", "React", "PostgreSQL"],
+    preferred_skills=["多租户架构", "NestJS", "支付对接", "CI/CD"],
+    experience_requirements=["本科及以上学历", "4 年以上全栈或后端开发经验"],
+    soft_skills=["独立交付能力", "跨职能协作能力"],
+)
+
+_ZHENGCHUAN_JD_KP = JDKeyPoints(
+    position="AI Agent 开发工程师（Python）",
+    responsibilities=[
+        "负责 LLM 应用与 Agent 链路的方案设计与工程落地",
+        "主导 RAG 检索链路、切片策略与检索效果优化",
+        "建设 AI 应用评测体系与效果监控",
+    ],
+    required_skills=["Python", "RAG 检索", "Prompt Engineering"],
+    preferred_skills=["LangGraph", "Function Calling", "MCP", "向量数据库"],
+    experience_requirements=["本科及以上学历", "3 年以上 AI 应用或后端开发经验"],
+    soft_skills=["业务抽象能力", "数据驱动迭代意识"],
 )
 
 SEED_PERSONAS = [
     SeedPersona(
-        username="liming",
-        resume_title="李明",
-        resume_md="""# 李明
-
-## 基本信息
-- 电话：13900001111
-- 邮箱：liming@example.com
-- 工作年限：6 年后端开发
-
-## 技术栈
-精通 Go 与 Python，熟悉 Gin、FastAPI 框架与 gRPC 服务治理。
-深入理解 MySQL 索引原理与分库分表方案，有千万级数据量的线上调优经验。
-熟悉 Kafka 削峰、Redis 缓存与分布式锁的工程实践，了解 Kubernetes 与服务网格。
-
-## 工作经历
-### 晨星云 高级后端工程师（2021.05 – 至今）
-负责实时数据管道的架构设计，将 Flink 消费延迟从秒级优化到百毫秒级。
-主导服务网格落地，统一了 30 余个微服务的可观测性方案。
-设计多租户配额与限流体系，保障大客户流量隔离。
-
-### 蓝湖信息 后端工程师（2018.07 – 2021.04）
-参与电商订单中台建设，负责大促期间的限流降级方案，支撑峰值 3 万 QPS。
-推动订单库从单库拆分为 16 个分片，慢查询率下降 90%。
-
-## 项目亮点
-- 消息推送平台：自研长连接网关，单机承载 20 万连接，丢包率低于 0.01%。
-- 规则引擎：基于表达式解析实现风控规则热更新，需求交付周期缩短一半。
-- 数据迁移工具：零停机双写迁移方案，累计完成 3 次核心库切换零事故。
-""",
-        jd_title="高级后端工程师（Go/Python）",
-        jd_content="""# 高级后端工程师（Go/Python）
-
-## 岗位职责
-1. 负责核心业务微服务的设计、开发与稳定性保障；
-2. 参与高并发场景下的性能优化与容量规划；
-3. 推动团队工程质量提升，沉淀通用组件与最佳实践。
-
-## 任职要求
-- 本科及以上学历，5 年以上后端开发经验；
-- 精通 Go 或 Python，熟悉 MySQL、Redis、Kafka 等常用组件；
-- 有大规模分布式系统或云原生（Kubernetes）实践经验者优先；
-- 具备良好的问题定位能力与团队协作意识。
-""",
-        jd_key_points=_LIMING_JD_KP,
-        presets=[
-            (
-                "介绍一下你做过的最有技术挑战的项目",
-                "最有挑战的是消息推送平台：我自研了长连接网关，单机承载 20 万连接，"
-                "丢包率低于 0.01%。核心难点在连接握手与心跳的内存模型设计，"
-                "以及大促期间百万级推送的削峰调度。",
-                ["项目", "挑战", "亮点"],
-            ),
-            (
-                "你如何做线上慢查询优化",
-                "我按「先定位、再治理」的思路：通过慢日志与执行计划定位劣化 SQL，"
-                "再结合索引重建与分库分表治理。在电商订单中台推动订单库拆为 16 个分片，"
-                "慢查询率下降 90%，大促峰值支撑 3 万 QPS。",
-                ["MySQL", "慢查询", "优化"],
-            ),
-        ],
-    ),
-    SeedPersona(
-        username="wangfang",
-        resume_title="王芳",
-        resume_md="""# 王芳
-
-## 基本信息
-- 电话：13900002222
-- 邮箱：wangfang@example.com
-- 工作年限：5 年前端开发
-
-## 技术栈
-精通 React 与 TypeScript，熟悉 Next.js 服务端渲染与状态管理方案。
-深入理解浏览器渲染原理，有首屏性能优化与长列表虚拟滚动的落地经验。
-熟悉 Vite 工程化、组件库设计与 Storybook 驱动的组件测试，了解 Webpack 构建优化。
-
-## 工作经历
-### 木棉科技 高级前端工程师（2021.03 – 至今）
-负责电商主站前端架构升级，将构建产物体积压缩 40%，首屏时间从 3.2s 降至 1.4s。
-主导设计系统与组件库建设，沉淀 60+ 通用组件，覆盖 5 条业务线。
-搭建前端监控体系，线上问题平均定位时长从小时级降至十分钟内。
-
-### 青藤网络 前端工程师（2019.07 – 2021.02）
-参与在线教育直播课堂开发，基于 WebRTC 实现低延迟互动白板。
-负责活动页搭建平台的前端部分，支撑运营日均上线 30 个页面。
-
-## 项目亮点
-- 可视化搭建平台：拖拽式页面搭建，运营自助上线活动页，开发介入率降为零。
-- 监控 SDK：自研前端监控采集 SDK，覆盖 JS 错误、接口异常与性能指标。
-- 低代码表单引擎：JSON Schema 驱动动态渲染，表单类需求交付周期缩短 60%。
-""",
+        username="chenxiao",
+        resume_title="陈晓",
+        resume_md=_load_resume("resume_frontend.md"),
         jd_title="高级前端工程师（React）",
         jd_content="""# 高级前端工程师（React）
 
@@ -175,26 +124,142 @@ SEED_PERSONAS = [
 3. 推动前端工程化与质量保障体系落地。
 
 ## 任职要求
-- 本科及以上学历，4 年以上前端开发经验；
-- 精通 React 与 TypeScript，熟悉 Next.js 或同构渲染方案；
-- 有大型站点性能优化（首屏、长列表）实践经验者优先；
-- 具备良好的跨团队沟通能力与技术方案输出能力。
+- 本科及以上学历，5 年以上前端开发经验；
+- 精通 React 与 TypeScript，具备中大型项目架构设计经验；
+- 有数据可视化或构建工具优化实践经验者优先；
+- 熟悉 Monorepo 工程实践者优先；
+- 具备良好的技术方案输出能力与跨团队沟通能力。
 """,
-        jd_key_points=_WANGFANG_JD_KP,
+        jd_key_points=_CHENXIAO_JD_KP,
         presets=[
             (
-                "介绍一下你的首屏性能优化经验",
-                "在电商主站前端架构升级中，我通过构建产物瘦身、路由级代码分割与"
-                "关键资源预加载，把首屏时间从 3.2 秒降到 1.4 秒，构建产物体积压缩 40%。"
-                "配套搭建了性能监控看板持续跟踪回归。",
-                ["性能", "首屏", "优化"],
+                "介绍一下你做过的最有挑战的项目",
+                "最有挑战的是 BI 可视化平台的大数据量渲染：单看板 50+ 图表、20 万数据点，"
+                "最初交互帧率只有 18fps。我改用 Canvas 渲染 + Web Worker 离屏计算 + 增量更新，"
+                "把帧率提到 55fps，卡顿投诉基本清零。",
+                ["项目", "挑战", "可视化"],
             ),
             (
-                "说说你的组件库建设经验",
-                "我主导过设计系统与组件库建设，沉淀 60+ 通用组件、覆盖 5 条业务线。"
-                "工程上用 Storybook 驱动组件开发与测试，配合语义化版本与变更日志，"
-                "让业务方升级成本可控。",
-                ["组件库", "设计系统"],
+                "你们前端的首屏性能是怎么优化的",
+                "在 BI 平台架构升级里我做了三件事：构建产物瘦身、路由级代码分割、关键资源预加载，"
+                "并把 LCP、INP 纳入上线卡点形成闭环。最终产物体积下降 46%，"
+                "首屏 LCP 从 3.8s 优化到 1.5s。",
+                ["性能", "首屏", "优化"],
+            ),
+        ],
+    ),
+    SeedPersona(
+        username="zhouhang",
+        resume_title="周航",
+        resume_md=_load_resume("resume_backend.md"),
+        jd_title="高级后端工程师（Go）",
+        jd_content="""# 高级后端工程师（Go）
+
+## 岗位职责
+1. 负责交易、订单核心链路的架构设计与稳定性保障；
+2. 主导高并发场景下的性能优化与容量规划；
+3. 推动服务治理与可观测性体系建设。
+
+## 任职要求
+- 本科及以上学历，5 年以上后端开发经验；
+- 精通 Go，熟悉 MySQL、Redis、Kafka 等常用组件；
+- 有分库分表、分布式事务实践经验者优先；
+- 有 Kubernetes 或 Flink 实时计算经验者优先；
+- 具备良好的线上问题定位能力与技术方案输出能力。
+""",
+        jd_key_points=_ZHOUHANG_JD_KP,
+        presets=[
+            (
+                "介绍一下你做过的最有技术挑战的项目",
+                "最有挑战的是订单库分库分表改造：1.2 亿数据要在线迁移且业务无感知。"
+                "我设计了以用户 ID 为分片键、订单号内置分片因子的方案，"
+                "用双写 + 数据校验 + 灰度切读分阶段推进。最终业务零中断、零数据丢失，"
+                "慢查询率下降 92%。",
+                ["项目", "挑战", "分库分表"],
+            ),
+            (
+                "大促高并发场景你是怎么保障稳定性的",
+                "我按三级联动做预案：网关层限流、服务层熔断、非核心链路降级，"
+                "配套全链路压测和容量评估。订单中台大促峰值支撑 5 万 QPS，"
+                "核心链路 P99 稳定在 120ms 以内，连续两年大促零故障。",
+                ["高并发", "稳定性", "限流"],
+            ),
+        ],
+    ),
+    SeedPersona(
+        username="linyue",
+        resume_title="林悦",
+        resume_md=_load_resume("resume_fullstack.md"),
+        jd_title="全栈开发工程师（TypeScript/Node）",
+        jd_content="""# 全栈开发工程师（TypeScript/Node）
+
+## 岗位职责
+1. 负责 SaaS 产品前后端全链路研发与交付；
+2. 参与多租户架构、权限体系与计费模块设计；
+3. 推动 CI/CD 与研发交付效率提升。
+
+## 任职要求
+- 本科及以上学历，4 年以上全栈或后端开发经验；
+- 熟悉 TypeScript、Node.js 与 React，能独立完成前后端开发；
+- 熟悉 PostgreSQL，具备数据建模与慢查询治理能力；
+- 有多租户 SaaS 或支付对接经验者优先；
+- 具备独立交付能力与良好的跨职能协作能力。
+""",
+        jd_key_points=_LINYUE_JD_KP,
+        presets=[
+            (
+                "介绍一下你负责过的完整项目",
+                "我主导过多租户 SaaS 运营平台从 0 到 1 的交付，覆盖租户开通、权限、"
+                "计费订阅和数据看板。数据模型上用共享库 + 租户 ID 隔离，"
+                "并用 NestJS 中间件统一处理租户解析与权限校验。"
+                "目前支撑 2000+ 企业租户、日活 1.2 万，核心接口 P95 在 240ms 以内。",
+                ["项目", "全栈", "SaaS"],
+            ),
+            (
+                "多租户系统的数据隔离你是怎么设计的",
+                "我采用共享库 + 租户 ID 的方案，在 NestJS 里做租户上下文中间件，"
+                "把租户解析、RBAC 权限校验和数据范围过滤统一收敛到请求链路，"
+                "避免每个业务查询各自拼过滤条件。权限上分角色、权限点、数据范围三层控制。",
+                ["多租户", "权限", "架构"],
+            ),
+        ],
+    ),
+    SeedPersona(
+        username="zhengchuan",
+        resume_title="郑川",
+        resume_md=_load_resume("resume_agent.md"),
+        jd_title="AI Agent 开发工程师（Python）",
+        jd_content="""# AI Agent 开发工程师（Python）
+
+## 岗位职责
+1. 负责 LLM 应用与 Agent 链路的方案设计与工程落地；
+2. 主导 RAG 检索链路、切片策略与检索效果优化；
+3. 建设 AI 应用评测体系与效果监控。
+
+## 任职要求
+- 本科及以上学历，3 年以上 AI 应用或后端开发经验；
+- 熟悉 Python，具备 RAG 检索链路的完整落地经验；
+- 熟悉 Prompt Engineering，理解上下文工程与幻觉治理；
+- 有 LangGraph、Function Calling、MCP 实践经验者优先；
+- 熟悉向量数据库（pgvector / Milvus 等）者优先；
+- 具备良好的业务抽象能力与数据驱动迭代意识。
+""",
+        jd_key_points=_ZHENGCHUAN_JD_KP,
+        presets=[
+            (
+                "介绍一下你在 RAG 检索上的优化经验",
+                "我在企业知识库问答里做过系统性调优：按文档结构分级切片并保留标题层级，"
+                "检索上用向量 + BM25 混合召回再做 Rerank 精排。"
+                "另外建了 500+ 真实问题的评测集，让优化从主观感受变成数据驱动，"
+                "问答准确率从 61% 提升到 88%。",
+                ["RAG", "检索", "优化"],
+            ),
+            (
+                "你是怎么把业务能力封装成 Agent 工具的",
+                "在智能客服 Agent 里，我用 Function Calling 实现了订单查询、物流跟踪、"
+                "退款申请、工单创建四类工具，并按 MCP 协议统一工具描述和参数 Schema，"
+                "让多个 AI 应用复用。工具调用成功率从 82% 提升到 96%。",
+                ["Agent", "工具调用", "MCP"],
             ),
         ],
     ),

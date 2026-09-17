@@ -57,7 +57,7 @@ docker compose up -d postgres
 # 4. 初始化业务表（Alembic，幂等可重复执行）
 cd server && uv run alembic upgrade head
 
-# （可选）灌入演示/测试数据：liming（后端画像）/ wangfang（前端画像）两个账号 + 各自简历与 JD
+# （可选）灌入演示/测试数据：种子账号 + 各自的简历、JD 与预设答案（画像清单见 scripts/seed.py）
 # 幂等可重复执行；--with-vectors 同步向量化（需本机 Ollama）；--clean 清理种子数据
 uv run python scripts/seed.py
 
@@ -112,7 +112,7 @@ docker compose up -d --build
 - **online 模式**：在 `server/.env` 中切换 `APP_LLM_MODE=online` 并填写供应商配置后，`docker compose up -d --build server` 重建生效。
 - **离线演示**：local 模式全程无外网依赖（模型推理与向量嵌入均走本机 Ollama），适合现场演示。
 - 会话检查点（SQLite）持久化于 `server-data` 卷，容器重建后会话可恢复。
-- （可选）灌入演示数据（liming / wangfang 两个画像账号）：`docker compose exec server python scripts/seed.py --with-vectors`（需宿主机 Ollama 在线）；`--clean` 清理。
+- （可选）灌入演示数据（画像清单见 `server/scripts/seed.py`）：`docker compose exec server python scripts/seed.py --with-vectors`（需宿主机 Ollama 在线）；`--clean` 清理。
 
 ```bash
 # 停止（数据卷保留）
@@ -166,7 +166,3 @@ docker compose down -v
 | `APP_INTERVIEW_MAX_QUESTIONS` 等     | 面试题数上限、追问轮数、RAG 阈值等行为参数                                                                 |
 
 前端类型契约由 `pnpm gen:api` 从后端 OpenAPI 生成（需后端运行中），产出 `client/src/api/schema.d.ts`。
-
-## 开发进度
-
-**M0–M7 全部完成并通过阶段验收**。逐阶段的状态、日期与提交见 [docs/progress/milestones.md](docs/progress/milestones.md)。

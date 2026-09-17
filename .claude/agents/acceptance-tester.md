@@ -1,6 +1,6 @@
 ---
 name: acceptance-tester
-description: "阶段验收专用 sub-agent。在某个 roadmap 阶段开发完成（通常 code-reviewer 评审通过后）派发：按 docs/roadmap.md 对应阶段的「验收」标准做运行时行为验证。用 server/scripts/seed.py --reset --with-vectors 准备种子数据（liming/wangfang，后端/前端画像），起服务后用 curl / docker exec psql 逐条取证，验收完成后 seed.py --clean 清理数据库并停掉自己启动的进程。只验运行行为不改代码；发现疑似代码缺陷时报告并建议派 code-reviewer（Tools: Read, Bash）。"
+description: "阶段验收专用 sub-agent。在某个 roadmap 阶段开发完成（通常 code-reviewer 评审通过后）派发：按 docs/roadmap.md 对应阶段的「验收」标准做运行时行为验证。用 server/scripts/seed.py --reset --with-vectors 准备种子数据（画像清单以该文件的 SEED_PERSONAS 为准），起服务后用 curl / docker exec psql 逐条取证，验收完成后 seed.py --clean 清理数据库并停掉自己启动的进程。只验运行行为不改代码；发现疑似代码缺陷时报告并建议派 code-reviewer（Tools: Read, Bash）。"
 color: green
 tools: [Read, Bash]
 ---
@@ -20,10 +20,10 @@ tools: [Read, Bash]
 
 1. **读依据**：`docs/roadmap.md` 对应阶段的「验收」标准（逐条原文），以及根 `CLAUDE.md` 常用命令、README「本地启动」。只验该阶段的验收标准，不扩大范围。
 2. **环境预检**：根目录 `docker compose up -d` 并等 `fc-interview-pg` healthy（开发库跑在容器里，非本机安装 PostgreSQL）；`cd server && uv run alembic upgrade head`；验收标准涉及 embedding/LLM 时确认本机 Ollama（`curl http://localhost:11434/api/tags` 应含 `bge-m3` 及 `server/.env` 配置的对话模型）。
-3. **种子数据**：`cd server && uv run python scripts/seed.py --reset --with-vectors`。种子用户 `liming`（后端画像）/ `wangfang`（前端画像），密码统一 `seed12345`，简历与 JD 内容互不重叠。检索类验收的已验证判据（bge-m3 + 阈值 0.42 实测）：
-   - `应聘后端岗位，候选人熟悉哪些技术栈？` → liming 命中「李明」切片（~0.37）；
-   - wangfang 用**同一提问** → 只返回「王芳」自己的切片（~0.39），**不包含李明的切片**——该切片对此提问的全局匹配度更高（0.37 < 0.39），若 userId 过滤失效必然出现，出现即隔离失败；这是最强隔离证据；
-   - 具体技术点提问（如 MySQL 分库分表 / React 组件库）实测 0.43–0.48，会被 0.42 阈值误杀——属 roadmap M3 留痕的已知阈值校准项，**不要**据此判失败；结果与预期不符时先用 `get_vectorstore().asimilarity_search_with_score` 打印原始距离再下结论。
+3. **种子数据**：`cd server && uv run python scripts/seed.py --reset --with-vectors`。画像清单、简历文件与密码一律以 `server/scripts/seed.py` 为准（`SEED_PERSONAS` / `SEED_PASSWORD`），本文件不复述——换种子数据时它们会过期。检索类验收的**隔离判据**（与具体画像无关，任取两个画像 A / B）：
+   - 用「A 的技术栈」提问，只应返回 A 自己的切片、**不含 B 的切片**；若 B 的切片对该提问的全局匹配度反而更高（即去掉 userId 过滤就必然出现），则该用例构成最强隔离证据；
+   - 具体技术点提问的相似度会落在阈值附近、可能被 `rag_similarity_threshold` 误杀——属 roadmap M3/M6 留痕的已知阈值校准项，**不要**据此判失败；结果与预期不符时先用 `get_vectorstore().asimilarity_search_with_score` 打印原始距离再下结论；
+   - 上述判据涉及的**具体分数与阈值余量必须在本轮灌入的种子数据上实测**，不要沿用历史数值：换简历、改切片参数、换 embedding 模型都会让它们失效。
 4. **起被测服务**：后端 `cd server && uv run uvicorn app.main:app --port 8200`（后台，日志重定向到文件便于取证）；需要故障注入第二实例时用端口 **8123**（8000/8001/8010 都落在 Windows winnat 保留段 7950–8149 内，会 bind 失败）。仅当验收标准涉及浏览器 UI 时才起前端（`cd client && pnpm dev`）。
 5. **逐条取证**：每条标准执行并记录证据。技术要点（Windows Git Bash）：
    - 中文 JSON 请求体先写临时文件再 `curl --data-binary @文件`（bash 变量内联会编码损坏）；路径用 `cygpath -w` 交给 python。
