@@ -19,7 +19,7 @@ from loguru import logger
 
 from app.config import settings
 from app.knowledge.service import PresetHit, RetrievedChunk
-from app.llm.factory import get_chat_model
+from app.llm.factory import get_chat_model, get_extract_model
 from app.llm.prompts import render_prompt
 from app.schemas.candidate import AnswerCritique
 
@@ -141,11 +141,7 @@ async def generate_answer(state: CandidateState, config: RunnableConfig) -> dict
 
 async def critique(state: CandidateState, config: RunnableConfig) -> dict:
     """点评：对最近一次问答结构化输出优点/不足/建议（E8）；失败降级不阻塞。"""
-    structured = (
-        get_chat_model()
-        .bind(temperature=settings.chat_extract_temperature)
-        .with_structured_output(AnswerCritique)
-    )
+    structured = get_extract_model().with_structured_output(AnswerCritique)
     prompt = render_prompt(
         "candidate_critique.md",
         question=state["current_question"],

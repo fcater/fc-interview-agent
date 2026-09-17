@@ -11,7 +11,7 @@ from loguru import logger
 
 from app.config import settings
 from app.core.exceptions import ReportGenerationError
-from app.llm.factory import get_chat_model
+from app.llm.factory import get_extract_model
 from app.llm.prompts import render_prompt
 from app.schemas.report import InterviewReport
 
@@ -27,18 +27,14 @@ _SYSTEM_PROMPT = (
 async def generate_report(
     *, resume_context: str, jd_key_points: str, qa_transcript: str
 ) -> InterviewReport:
-    """生成评分报告：低温结构化输出 + 应用层重试（本地小模型成功率约 95%）。"""
+    """生成评分报告：低温 + 关闭思维链的结构化输出 + 应用层重试兜底。"""
     prompt = render_prompt(
         "report_rubric.md",
         resume_context=resume_context,
         jd_key_points=jd_key_points,
         qa_transcript=qa_transcript,
     )
-    structured = (
-        get_chat_model()
-        .bind(temperature=settings.chat_extract_temperature)
-        .with_structured_output(InterviewReport)
-    )
+    structured = get_extract_model().with_structured_output(InterviewReport)
     last_error: Exception | None = None
     for attempt in range(settings.report_max_retries + 1):
         try:

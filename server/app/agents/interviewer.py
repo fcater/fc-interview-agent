@@ -17,9 +17,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 from loguru import logger
 
-from app.config import settings
 from app.knowledge.service import RetrievedChunk
-from app.llm.factory import get_chat_model
+from app.llm.factory import get_chat_model, get_extract_model
 from app.llm.prompts import render_prompt
 from app.schemas.interview import QuestionEvaluation
 
@@ -136,11 +135,7 @@ async def wait_answer(state: InterviewState, config: RunnableConfig) -> dict:
 
 async def evaluate_answer(state: InterviewState, config: RunnableConfig) -> dict:
     """判答：结构化输出简评与是否追问（E8）；失败降级为不追问（R4，面试不中断）。"""
-    structured = (
-        get_chat_model()
-        .bind(temperature=settings.chat_extract_temperature)
-        .with_structured_output(QuestionEvaluation)
-    )
+    structured = get_extract_model().with_structured_output(QuestionEvaluation)
     prompt = render_prompt(
         "evaluate_answer.md",
         question=state["current_question"],
@@ -156,7 +151,7 @@ async def evaluate_answer(state: InterviewState, config: RunnableConfig) -> dict
         need_follow_up = result.need_follow_up
         follow_up_point = result.follow_up_point.strip()
     except Exception:
-        # 结构化失败重试由模型层承担（openai 兼容端点）；仍失败则降级，不阻塞面试
+        # 结构化失败（本地 Ollama 无客户端重试，在线端点由供应商重试）则降级不阻塞面试
         logger.exception("判答结构化输出失败，降级为不追问 index={}", state["question_index"])
         assessment = "（本次评估生成失败，已跳过）"
         need_follow_up = False

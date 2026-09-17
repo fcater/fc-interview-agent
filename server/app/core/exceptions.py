@@ -48,3 +48,10 @@ class ReportGenerationError(AppError):
 
     code = "report_generation_failed"
     status_code = 500
+
+
+class JDExtractError(AppError):
+    """JD 关键点提取失败（结构化输出解析失败等）。"""
+
+    code = "jd_extract_failed"
+    status_code = 500

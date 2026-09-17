@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     chat_temperature: float = 0.7
     # 提取类任务（JD 关键点等）为确定性任务，用独立低温减少字段漂移（R4）
     chat_extract_temperature: float = 0.1
+    # 提取/评分等结构化任务关闭思维链（E8）：思维链 token 计入 num_predict，
+    # 长 prompt 下思维链跑满上限 → content 为空 → 结构化解析必然失败（实测踩坑：
+    # 长 JD 提取输出 4096 tokens 全为思维链，JSON 为空；关闭后 ~170 tokens 完成）。
+    # 仅 ollama 生效；在线端点的思维链由供应商侧控制
+    chat_extract_reasoning: bool = False
     chat_timeout_seconds: int = 60
     chat_max_retries: int = 1
     # ollama 专属推理参数：上下文窗口必须 ≥ 最长 prompt（评分报告 ~3.5K tokens），
