@@ -7,6 +7,7 @@ AI 面试模拟 Agent：基于「个人简历 + 目标岗位 JD」的中文模�
 - [docs/project-scope.md](docs/project-scope.md) — 项目范围：目标、核心功能、扩展点、MVP 边界
 - [docs/tech-stack.md](docs/tech-stack.md) — 技术选型：Python + LangChain + LangGraph / FastAPI / PostgreSQL + pgvector / React
 - [docs/roadmap.md](docs/roadmap.md) — 开发 Roadmap：M0–M7 阶段任务与验收标准
+- [docs/progress/milestones.md](docs/progress/milestones.md) — 开发进度：M0–M7 阶段状态、日期与提交归档
 
 ## 目录结构
 
@@ -41,27 +42,29 @@ fc-interview-agent/
 
 ## 本地启动
 
-前置：Python 3.12+（[uv](https://docs.astral.sh/uv/)）、Node 22 + [pnpm](https://pnpm.io/)、Docker（开发数据库用 pgvector 容器）、[Ollama](https://ollama.com/)（`APP_LLM_MODE=local` 时需要，见下方「LLM 模式」）。
+前置：Python 3.12+（[uv](https://docs.astral.sh/uv/)）、Node 22 + [pnpm](https://pnpm.io/)、**Docker Desktop**（开发数据库跑在容器里，**本机不需要安装 PostgreSQL**）、[Ollama](https://ollama.com/)（`APP_LLM_MODE=local` 时需要，见下方「LLM 模式」）。
 
 ```bash
 # 1. 环境变量（两份都先建好，compose 解析时需要；凭据一律走环境变量，仓库只提供 .env.example）
 cp .env.example .env                 # 修改 POSTGRES_PASSWORD
 cp server/.env.example server/.env   # 把 APP_DATABASE_URL 改为上一步的 POSTGRES_PASSWORD（账号/端口见样例）
 
-# 2. 数据库：docker compose 仅启动 pgvector 容器（开发模式不构建服务镜像；首次自动建库 + vector 扩展，宿主机端口 5433）
+# 2. 启动 Docker Desktop（数据库跑在容器里；守护进程没起时下面所有 docker 命令都会失败）
+
+# 3. 数据库：docker compose 仅启动 pgvector 容器（开发模式不构建服务镜像；首次自动建库 + vector 扩展，宿主机端口 5433）
 docker compose up -d postgres
 
-# 3. 初始化业务表（Alembic，幂等可重复执行）
+# 4. 初始化业务表（Alembic，幂等可重复执行）
 cd server && uv run alembic upgrade head
 
 # （可选）灌入演示/测试数据：liming（后端画像）/ wangfang（前端画像）两个账号 + 各自简历与 JD
 # 幂等可重复执行；--with-vectors 同步向量化（需本机 Ollama）；--clean 清理种子数据
 uv run python scripts/seed.py
 
-# 4. 一键启动后端 + 前端（POSIX 脚本，Linux / macOS / Windows Git Bash 通用；Ctrl+C 停止）
+# 5. 一键启动后端 + 前端（POSIX 脚本，Linux / macOS / Windows Git Bash 通用；Ctrl+C 停止）
 ./dev.sh
 
-# 后端 http://localhost:8000（/docs 为 OpenAPI 页面，Postman 直连此端口）
+# 后端 http://localhost:8200（/docs 为 OpenAPI 页面，Postman 直连此端口）
 # 前端 http://localhost:5173（浏览器访问，/api 代理到后端）
 ```
 
@@ -69,7 +72,19 @@ uv run python scripts/seed.py
 
 前端首页会请求后端 `/health` 展示服务状态（后端 / 数据库 / LLM 模式）。
 
-> 开发数据库即上述 pgvector 容器（分发部署复用同一 compose 并扩展全栈编排，见下方「Docker 全栈部署」）。国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
+### 数据库层（Docker，无需本机安装 PostgreSQL）
+
+- **本地开发与线上部署用同一套数据库**：`pgvector/pgvector:pg16` 容器，业务表与向量同库同实例。本机不需要装 PostgreSQL，也不需要单独装 pgvector——镜像自带。
+- **日常只需保证 Docker Desktop 在运行**。容器配的是 `restart: unless-stopped`，Docker 守护进程一起来它就会自动恢复，不必每次手动 `up`；只有首次（或数据卷被删后）才需要 `docker compose up -d postgres` 建库。
+- **`./dev.sh` 会做预检**：启动前后端之前先探容器状态，没起来会直接告诉你是「docker 命令缺失 / 守护进程没起 / 容器没起」并给出该执行的命令，不会让你对着后端的连接报错猜。
+- **连不上的排查顺序**：
+  1. Docker Desktop 是否在运行（`docker info` 不报错）；
+  2. 容器是否健康：`docker compose ps`，`fc-interview-pg` 应为 `Up (healthy)`；
+  3. 端口是否被占：宿主端口默认 **5433**（容器内固定 5432），可在根目录 `.env` 用 `POSTGRES_PORT` 改。Windows 上还可能是保留端口段作祟，见下方「Docker 全栈部署」末尾的排障说明。
+- **库结构变更后**重新执行 `cd server && uv run alembic upgrade head`（幂等，可重复跑）。
+- 凭据存在根目录 `.env`（`POSTGRES_PASSWORD`），`server/.env` 的 `APP_DATABASE_URL` 用同一套账号口令；两份都已在第 1 步建好。容器删掉数据卷（`docker compose down -v`）会**清空全部业务数据与向量**，慎用。
+
+> 国内网络下 Docker Hub 拉取缓慢时，可经镜像站拉取后打回标准 tag：
 > `docker pull docker.1ms.run/pgvector/pgvector:pg16 && docker tag docker.1ms.run/pgvector/pgvector:pg16 pgvector/pgvector:pg16`
 
 ## Docker 全栈部署
@@ -88,7 +103,7 @@ docker compose up -d --build
 
 # 3. 访问
 # 前端 http://localhost:8080   （nginx 托管，/api 自动反代到后端）
-# 后端 http://localhost:8000/docs（OpenAPI 页面，可直连调试）
+# 后端 http://localhost:8200/docs（OpenAPI 页面，可直连调试）
 ```
 
 说明：
@@ -154,13 +169,4 @@ docker compose down -v
 
 ## 开发进度
 
-| 阶段 | 内容                                        | 状态      |
-| ---- | ------------------------------------------- | --------- |
-| M0   | 工程骨架（server + client 初始化）          | ✅ 已验收 |
-| M1   | 数据层 + 用户体系（注册登录、JWT、隔离）    | ✅ 已验收 |
-| M2   | 简历与 JD 管理（解析器接口、脱敏、JD 提取） | ✅ 已验收 |
-| M3   | 知识库 RAG（切片、嵌入、向量检索）          | ✅ 已验收 |
-| M4   | AI 面试官核心闭环（LangGraph）              | ✅ 已验收 |
-| M5   | 面试评估与复盘                              | ✅ 已验收 |
-| M6   | AI 求职者（含预设答案匹配）                 | ✅ 已验收 |
-| M7   | 部署与收尾                                  | ✅ 已验收 |
+**M0–M7 全部完成并通过阶段验收**。逐阶段的状态、日期与提交见 [docs/progress/milestones.md](docs/progress/milestones.md)。

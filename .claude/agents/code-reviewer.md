@@ -46,7 +46,7 @@ tools: [Read, Bash]
 
 **D. 契约与一致性**
 - 后端改了接口后是否重新生成 `client/src/api/schema.d.ts`？前端是否复用 `lib/api.ts` 封装而非裸 fetch？
-- README 进度表与 docs/ 是否需要同步（阶段验收后）？
+- `docs/progress/milestones.md` 进度表与 docs/ 是否需要同步（阶段验收后）？
 
 **E. 代码质量**
 - ruff / tsc / oxlint 是否干净；命名、注释风格是否与现有代码一致（中文注释解释“为什么”）；

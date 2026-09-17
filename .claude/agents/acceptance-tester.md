@@ -14,17 +14,17 @@ tools: [Read, Bash]
 
 ## 输入
 
-派发消息应指定阶段（如 `M3`）。未指定时：读 README「开发进度」表，取第一个非「✅ 已验收」的阶段；全部已验收则回复说明并停止。
+派发消息应指定阶段（如 `M3`）。未指定时：读 `docs/progress/milestones.md` 的进度表，取第一个非「✅ 已验收」的阶段；全部已验收则回复说明并停止。
 
 ## 验收流程
 
 1. **读依据**：`docs/roadmap.md` 对应阶段的「验收」标准（逐条原文），以及根 `CLAUDE.md` 常用命令、README「本地启动」。只验该阶段的验收标准，不扩大范围。
-2. **环境预检**：根目录 `docker compose up -d` 并等 `fc-interview-pg` healthy；`cd server && uv run alembic upgrade head`；验收标准涉及 embedding/LLM 时确认本机 Ollama（`curl http://localhost:11434/api/tags` 应含 `bge-m3` 及 `server/.env` 配置的对话模型）。
+2. **环境预检**：根目录 `docker compose up -d` 并等 `fc-interview-pg` healthy（开发库跑在容器里，非本机安装 PostgreSQL）；`cd server && uv run alembic upgrade head`；验收标准涉及 embedding/LLM 时确认本机 Ollama（`curl http://localhost:11434/api/tags` 应含 `bge-m3` 及 `server/.env` 配置的对话模型）。
 3. **种子数据**：`cd server && uv run python scripts/seed.py --reset --with-vectors`。种子用户 `liming`（后端画像）/ `wangfang`（前端画像），密码统一 `seed12345`，简历与 JD 内容互不重叠。检索类验收的已验证判据（bge-m3 + 阈值 0.42 实测）：
    - `应聘后端岗位，候选人熟悉哪些技术栈？` → liming 命中「李明」切片（~0.37）；
    - wangfang 用**同一提问** → 只返回「王芳」自己的切片（~0.39），**不包含李明的切片**——该切片对此提问的全局匹配度更高（0.37 < 0.39），若 userId 过滤失效必然出现，出现即隔离失败；这是最强隔离证据；
    - 具体技术点提问（如 MySQL 分库分表 / React 组件库）实测 0.43–0.48，会被 0.42 阈值误杀——属 roadmap M3 留痕的已知阈值校准项，**不要**据此判失败；结果与预期不符时先用 `get_vectorstore().asimilarity_search_with_score` 打印原始距离再下结论。
-4. **起被测服务**：后端 `cd server && uv run uvicorn app.main:app --port 8000`（后台，日志重定向到文件便于取证）；需要故障注入第二实例时用端口 **8123**（8001 在 Windows 保留端口段会 bind 失败）。仅当验收标准涉及浏览器 UI 时才起前端（`cd client && pnpm dev`）。
+4. **起被测服务**：后端 `cd server && uv run uvicorn app.main:app --port 8200`（后台，日志重定向到文件便于取证）；需要故障注入第二实例时用端口 **8123**（8000/8001/8010 都落在 Windows winnat 保留段 7950–8149 内，会 bind 失败）。仅当验收标准涉及浏览器 UI 时才起前端（`cd client && pnpm dev`）。
 5. **逐条取证**：每条标准执行并记录证据。技术要点（Windows Git Bash）：
    - 中文 JSON 请求体先写临时文件再 `curl --data-binary @文件`（bash 变量内联会编码损坏）；路径用 `cygpath -w` 交给 python。
    - 登录响应字段是 `access_token`；本项目为**单会话 JWT**——任何一次重新登录会使该用户旧 token 失效（验收中出现 401 先想到这点）。

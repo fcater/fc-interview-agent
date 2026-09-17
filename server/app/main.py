@@ -1,6 +1,6 @@
 """FastAPI 应用入口：应用创建、中间件、路由注册、异常处理。
 
-启动：`uv run uvicorn app.main:app --port 8000`（在 server/ 目录下，见根目录 dev.sh）
+启动：`uv run uvicorn app.main:app --port 8200`（在 server/ 目录下，见根目录 dev.sh）
 """
 
 import time

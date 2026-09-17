@@ -15,7 +15,7 @@ AI 面试模拟 Agent：基于「简历 + 岗位 JD」的中文模拟面试工�
 
 ```bash
 ./dev.sh                                  # 一键启动前后端（Ctrl+C 停止）
-cd server && uv run uvicorn app.main:app --port 8000 --reload   # 单独起后端（/docs 看 OpenAPI）
+cd server && uv run uvicorn app.main:app --port 8200 --reload   # 单独起后端（/docs 看 OpenAPI）
 cd server && uv run alembic upgrade head  # 迁移（幂等，仅业务表；向量表由 PGVector 自动建）
 cd server && uv run python scripts/seed.py  # 灌入演示/测试数据（幂等；--reset 重建，--with-vectors 向量化）
 cd server && uv run ruff check app        # 后端 lint（line-length 100，迁移文件除外）
@@ -24,11 +24,11 @@ cd client && pnpm gen:api                 # 从后端 OpenAPI 生成 src/api/sch
 cd client && pnpm exec tsc -b && pnpm lint # 前端类型检查 + lint
 ```
 
-数据库：本机 PostgreSQL，库 `fc_interview`；凭据在 `server/.env`（不入库，样例见 `server/.env.example`）。
+数据库：**Docker 的 pgvector 容器**（本地开发与线上部署同一套，不用本机安装 PG）——`docker compose up -d postgres` 起，宿主机端口 5433，库 `fc_interview`；凭据在 `server/.env`（不入库，样例见 `server/.env.example`）。
 
 ## 硬性约定（违反 = 返工）
 
-1. **顺序开发**：严格按 roadmap M0→M7 逐阶段，阶段验收通过后才进下一阶段，并更新 README 进度表。当前进度见 README「开发进度」。
+1. **顺序开发**：严格按 roadmap M0→M7 逐阶段，阶段验收通过后才进下一阶段，并更新 `docs/progress/milestones.md` 的进度表（进度唯一来源，README 只剩入口链接）。当前进度见该文件。
 2. **提交纪律**：**不要主动 `git commit`**——提交必须由用户明确要求（review / 测试通过后）。改完代码只报告变更内容与验证结果，提交时机由用户决定。
 3. **多用户隔离（E7）**：所有业务表与向量检索自写入起必须带 `user_id`；服务层一律从 `Depends(get_current_user)` 注入的当前用户取 user_id，查询条件强制过滤；越权访问返回 404（不泄露资源存在性）。
 4. **扩展点不写死（E1–E10，见 tech-stack §5）**：供应商/模型/阈值/解析器/rubric 等全部经接口 + 配置（`app/config.py`，pydantic-settings，环境变量 `APP_` 前缀注入），业务代码不出现具体模型名。
@@ -46,7 +46,7 @@ cd client && pnpm exec tsc -b && pnpm lint # 前端类型检查 + lint
 
 ## Sub-agent
 
-- `code-reviewer`：代码评审专用 sub-agent，定义在 `.zcode/agents/code-reviewer.md`（ZCode 项目级 sub-agent 目录）。改动完成后可派发它按本文件「硬性约定」做静态评审；它只读（Read + Bash），不改代码。
-- `acceptance-tester`：阶段验收专用 sub-agent，定义在 `.zcode/agents/acceptance-tester.md`。阶段开发完成（评审通过）后派发，按 docs/roadmap.md 对应验收标准做运行时验证：`scripts/seed.py` 准备种子数据 → 逐条取证 → `--clean` 清理数据库；不改代码（Read + Bash）。
+- `code-reviewer`：代码评审专用 sub-agent，定义在 `.claude/agents/code-reviewer.md`（Claude Code 项目级 sub-agent 目录）。改动完成后可派发它按本文件「硬性约定」做静态评审；它只读（Read + Bash），不改代码。
+- `acceptance-tester`：阶段验收专用 sub-agent，定义在 `.claude/agents/acceptance-tester.md`。阶段开发完成（评审通过）后派发，按 docs/roadmap.md 对应验收标准做运行时验证：`scripts/seed.py` 准备种子数据 → 逐条取证 → `--clean` 清理数据库；不改代码（Read + Bash）。
 
 > 两个 agent 各自独立上下文：评审管「代码写没写对」（静态约定），验收管「系统跑没跑对」（运行行为）；共享约定单点维护在本文件，agent 定义里只写各自的流程，不复制约定内容。

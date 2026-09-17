@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在根目录 .env 中配置 POSTGRES_PASSWORD（参考 .env.example）}
       POSTGRES_DB: ${POSTGRES_DB:?请在根目录 .env 中配置 POSTGRES_DB（参考 .env.example）}
     ports:
-      # 宿主机映射端口可配（默认 5433：避免与本机已安装的 PostgreSQL 服务 5432 冲突）
+      # 宿主机映射端口可配（默认 5433：避开宿主机原本可能已占用的 5432）
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -43,8 +43,9 @@ services:
       # Linux 宿主机兼容（Windows / macOS 的 Docker Desktop 自带该域名解析）
       - "host.docker.internal:host-gateway"
     ports:
-      # 宿主机直连后端可选（/docs OpenAPI 页面、Postman 调试）
-      - "${SERVER_PORT:-8000}:8000"
+      # 宿主机直连后端可选（/docs OpenAPI 页面、Postman 调试）；容器内仍是 8000，
+      # 只改宿主机侧——8000 在 Windows 上落在 winnat 保留段（7950-8049）内会 bind 失败
+      - "${SERVER_PORT:-8200}:8000"
     volumes:
       # LangGraph 会话检查点（SQLite，data/ 已 .dockerignore）持久化
       - server-data:/app/data
