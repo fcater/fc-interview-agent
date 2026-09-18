@@ -6,9 +6,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * 全局设计令牌（唯一颜色来源）：
+ * 深海军蓝侧栏 + 浅紫白画布 + 白色大圆角卡片 + 靛紫主色。
+ * 业务代码一律使用语义类（bg-card / text-muted-foreground / bg-success-soft …），
+ * 禁止硬编码色值；新增颜色时先在这里定义变量并映射到 @theme。
+ */
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-sans: 'Geist Variable', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -26,6 +32,7 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-destructive-soft: var(--destructive-soft);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -34,12 +41,22 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-primary-2: var(--primary-2);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-success-soft: var(--success-soft);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning-soft: var(--warning-soft);
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-info-soft: var(--info-soft);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -50,72 +67,104 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    /* 画布与文字 */
+    --background: #f4f6fb;
+    --foreground: #17233f;
+    --card: #ffffff;
+    --card-foreground: #17233f;
+    --popover: #ffffff;
+    --popover-foreground: #17233f;
+    /* 品牌靛紫（primary-2 用于渐变的另一端） */
+    --primary: #4c55e8;
+    --primary-2: #6955e8;
+    --primary-foreground: #ffffff;
+    /* 次级 / 静音 / 悬停 */
+    --secondary: #f2f4fa;
+    --secondary-foreground: #3d4763;
+    --muted: #f2f4fa;
+    --muted-foreground: #6e7890;
+    --accent: #eef0ff;
+    --accent-foreground: #3a4468;
+    /* 状态色（soft 为浅底，foreground 为浅底上的可读文字色） */
+    --destructive: #e25b68;
+    --destructive-soft: #fff0f2;
+    --success: #15a875;
+    --success-foreground: #0e7d58;
+    --success-soft: #e8faf3;
+    --warning: #f0a51b;
+    --warning-foreground: #8a5c07;
+    --warning-soft: #fff7df;
+    --info: #3d7bfa;
+    --info-foreground: #2563c4;
+    --info-soft: #edf3ff;
+    /* 线条与焦点 */
+    --border: #e7eaf4;
+    --input: #e3e7f2;
+    --ring: #7c82ef;
+    /* 图表（雷达图 / 趋势等） */
+    --chart-1: #4c55e8;
+    --chart-2: #8b5cf6;
+    --chart-3: #15a875;
+    --chart-4: #f0a51b;
+    --chart-5: #3d7bfa;
+    /* 卡片大圆角 + 柔和投影 */
+    --radius: 0.875rem;
+    --shadow-card: 0 12px 34px rgb(28 42 88 / 0.07);
+    /* 深海军蓝侧栏 */
+    --sidebar: #081a40;
+    --sidebar-foreground: #c3cde6;
+    --sidebar-primary: #4c55e8;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgb(255 255 255 / 0.08);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgb(255 255 255 / 0.09);
+    --sidebar-ring: #4c55e8;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #0b1226;
+    --foreground: #e6eaf5;
+    --card: #101a36;
+    --card-foreground: #e6eaf5;
+    --popover: #101a36;
+    --popover-foreground: #e6eaf5;
+    --primary: #6a72f0;
+    --primary-2: #8671f0;
+    --primary-foreground: #ffffff;
+    --secondary: #1a2547;
+    --secondary-foreground: #c3cde6;
+    --muted: #1a2547;
+    --muted-foreground: #8b96b3;
+    --accent: #1c2750;
+    --accent-foreground: #d7ddf0;
+    --destructive: #ef7480;
+    --destructive-soft: #3a1c26;
+    --success: #2cc08c;
+    --success-foreground: #9ef0cf;
+    --success-soft: #10312a;
+    --warning: #f0b04a;
+    --warning-foreground: #ffdfa3;
+    --warning-soft: #352a12;
+    --info: #6a9bfc;
+    --info-foreground: #bcd2ff;
+    --info-soft: #14224a;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.14);
+    --ring: #6a72f0;
+    --chart-1: #6a72f0;
+    --chart-2: #a78bfa;
+    --chart-3: #2cc08c;
+    --chart-4: #f0b04a;
+    --chart-5: #6a9bfc;
+    --shadow-card: 0 12px 34px rgb(0 0 0 / 0.35);
+    --sidebar: #0a1128;
+    --sidebar-foreground: #c3cde6;
+    --sidebar-primary: #6a72f0;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgb(255 255 255 / 0.08);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgb(255 255 255 / 0.1);
+    --sidebar-ring: #6a72f0;
 }
 
 @layer base {
@@ -128,4 +177,40 @@
   html {
     @apply font-sans;
     }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+  /* 细滚动条（浅色滑块，悬停加深） */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+  }
+}
+
+/* ── 主题级复用样式（品牌渐变 / 装饰光斑 / 卡片投影）──────────── */
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+/* 品牌渐变：主按钮 / 激活导航 / 品牌标共用 */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--primary), var(--primary-2));
+}
+
+/* 侧栏深蓝渐变背景 */
+@utility bg-sidebar-gradient {
+  background-image: linear-gradient(180deg, var(--sidebar), color-mix(in srgb, var(--sidebar), white 6%));
+}
+
+/* 装饰性光斑（hero / 深色卡片角部的柔和径向光） */
+@utility bg-glow {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--primary) 22%, transparent), transparent 68%);
+}
+
+/* 品牌渐变文字 */
+@utility text-brand-gradient {
+  background-image: linear-gradient(120deg, var(--primary), var(--primary-2));
+  background-clip: text;
+  color: transparent;
 }

@@ -3,7 +3,10 @@
 启动：`uv run uvicorn app.main:app --port 8200`（在 server/ 目录下，见根目录 dev.sh）
 """
 
+import asyncio
 import time
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -105,21 +108,52 @@ async def _ping_database() -> bool:
     return True
 
 
+def _ping_llm_sync() -> bool:
+    """同步探测 LLM 服务连通性（在线程池中执行，避免阻塞事件循环）。
+
+    local 模式探 Ollama /api/tags，online 模式探 OpenAI 兼容端点 /models；
+    只做轻量连通性探测（2s 超时），不触发推理。任何失败（含 HTTP 非 2xx、
+    未配置 chat_base_url）一律返回 False，不向上抛。
+    """
+    if settings.llm_mode == "local":
+        url = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
+        headers: dict[str, str] = {}
+    else:
+        if not settings.chat_base_url:
+            return False
+        url = f"{settings.chat_base_url.rstrip('/')}/models"
+        headers: dict[str, str] = {}
+        if settings.chat_api_key:
+            headers["Authorization"] = f"Bearer {settings.chat_api_key}"
+    try:
+        req = urllib.request.Request(url, headers=headers)  # noqa: S310
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except OSError:  # URLError / HTTPError / 连接超时均继承自 OSError
+        return False
+
+
+async def _ping_llm() -> bool:
+    return await asyncio.to_thread(_ping_llm_sync)
+
+
 @health_router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     try:
-        db_up = await _ping_database()
+        db_up, llm_up = await asyncio.gather(_ping_database(), _ping_llm())
     except Exception as exc:  # 健康检查自身执行异常：结构化返回 error，不抛裸 500
         return HealthResponse(
             status="error",
             app_llm_mode=settings.llm_mode,
             database=None,
+            llm=None,
             detail=f"健康检查执行失败：{exc}",
         )
     return HealthResponse(
-        status="ok" if db_up else "degraded",
+        status="ok" if db_up and llm_up else "degraded",
         app_llm_mode=settings.llm_mode,
         database="up" if db_up else "down",
+        llm="up" if llm_up else "down",
     )
 
 

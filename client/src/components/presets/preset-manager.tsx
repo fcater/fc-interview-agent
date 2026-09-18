@@ -74,7 +74,7 @@ function PresetManagerBody() {
         </Button>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border">
         {presets.isPending && (
           <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> 加载中…
@@ -93,9 +93,9 @@ function PresetManagerBody() {
                 <p className="truncate text-sm font-medium">{p.question}</p>
                 <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.answer}</p>
                 {p.tags.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
+                  <div className="mt-1.5 flex flex-wrap gap-1">
                     {p.tags.map((t) => (
-                      <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                      <span key={t} className="rounded-md bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">
                         {t}
                       </span>
                     ))}
@@ -158,7 +158,7 @@ function PresetForm({ preset, onDone }: { preset: PresetBrief | null; onDone: ()
   }
 
   return (
-    <div className="space-y-3 rounded-md border bg-muted/30 p-4">
+    <div className="space-y-3 rounded-xl border bg-muted/40 p-4">
       <div className="space-y-1.5">
         <Label htmlFor="preset-question">预设问题</Label>
         <Input

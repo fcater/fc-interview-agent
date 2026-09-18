@@ -28,7 +28,7 @@ cd client && pnpm exec tsc -b && pnpm lint # 前端类型检查 + lint
 
 ## 硬性约定（违反 = 返工）
 
-1. **顺序开发**：严格按 roadmap M0→M7 逐阶段，阶段验收通过后才进下一阶段，并更新 `docs/progress/milestones.md` 的进度表（进度唯一来源，README 只剩入口链接）。当前进度见该文件。
+1. **顺序开发**：严格按 roadmap M0→M7 逐阶段，阶段验收通过后才进下一阶段，并更新 `docs/progress/[20260915]MVP.md` 的进度表（进度唯一来源，README 只剩入口链接；进度文件按「[YYYYMMDD]主题」命名归档）。当前进度见该文件。
 2. **提交纪律**：**不要主动 `git commit`**——提交必须由用户明确要求（review / 测试通过后）。改完代码只报告变更内容与验证结果，提交时机由用户决定。
 3. **多用户隔离（E7）**：所有业务表与向量检索自写入起必须带 `user_id`；服务层一律从 `Depends(get_current_user)` 注入的当前用户取 user_id，查询条件强制过滤；越权访问返回 404（不泄露资源存在性）。
 4. **扩展点不写死（E1–E10，见 tech-stack §5）**：供应商/模型/阈值/解析器/rubric 等全部经接口 + 配置（`app/config.py`，pydantic-settings，环境变量 `APP_` 前缀注入），业务代码不出现具体模型名。

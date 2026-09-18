@@ -1,253 +1,251 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { api, candidateApi, interviewApi, jdApi, resumeApi } from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { useCurrentUser } from '@/hooks/use-current-user'
-import type { components } from '@/api/schema'
+import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { Link } from "react-router";
+import { ArrowRight, Bot, Sparkles, SquareUser } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { AiCharacter } from "@/components/ai-character";
+import { interviewApi, jdApi, resumeApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useLlmReady } from "@/hooks/use-health";
 
-type HealthResponse = components['schemas']['HealthResponse']
+type InterviewRecord = Awaited<ReturnType<typeof interviewApi.list>>[number];
 
-/** 首页：开始模拟面试（选简历 + JD）+ 登录用户信息 + 服务状态 */
+/** 工作台仪表盘：hero + 数据概览四格 + 最近面试 / 得分趋势（内容分布对照原型 demo） */
 export function HomePage() {
-  const me = useCurrentUser()
-  const navigate = useNavigate()
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => api.get<HealthResponse>('/health'),
-  })
+  const llmReady = useLlmReady();
+  const resumes = useQuery({ queryKey: ["resumes"], queryFn: resumeApi.list });
+  const jds = useQuery({ queryKey: ["jds"], queryFn: jdApi.list });
+  const records = useQuery({ queryKey: ["interviews"], queryFn: interviewApi.list });
 
-  const resumes = useQuery({ queryKey: ['resumes'], queryFn: resumeApi.list })
-  const jds = useQuery({ queryKey: ['jds'], queryFn: jdApi.list })
-  const [resumeId, setResumeId] = useState<number | null>(null)
-  const [jdId, setJdId] = useState<number | null>(null)
-  const [starting, setStarting] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
-  const [practicing, setPracticing] = useState(false)
-  const [practiceError, setPracticeError] = useState<string | null>(null)
-
-  const startInterview = async () => {
-    if (!resumeId) return
-    setStarting(true)
-    setStartError(null)
-    try {
-      const session = await interviewApi.start({ resume_id: resumeId, jd_id: jdId })
-      void navigate(`/interviews/${session.id}`)
-    } catch (err) {
-      setStartError(err instanceof Error ? err.message : '创建面试会话失败')
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  /** 求职者模式：AI 以所选简历主人口吻应答（仅选简历，无 JD） */
-  const startPractice = async () => {
-    if (!resumeId) return
-    setPracticing(true)
-    setPracticeError(null)
-    try {
-      const session = await candidateApi.start({ resume_id: resumeId })
-      void navigate(`/candidate/sessions/${session.id}`)
-    } catch (err) {
-      setPracticeError(err instanceof Error ? err.message : '创建求职者练习会话失败')
-    } finally {
-      setPracticing(false)
-    }
-  }
+  const list = records.data ?? [];
+  const scored = list
+    .filter((r) => r.role === "interviewer" && r.status === "completed" && r.overall_score != null)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const avg = scored.length
+    ? Math.round(scored.slice(-5).reduce((s, r) => s + (r.overall_score ?? 0), 0) / Math.min(scored.length, 5))
+    : null;
+  const best = scored.length
+    ? scored.reduce((m, r) => ((r.overall_score ?? 0) > (m.overall_score ?? 0) ? r : m))
+    : null;
 
   return (
-    <div className="space-y-8">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight">首页</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          选择简历开始：面试官模式由 AI 向你提问，求职者模式由你向 AI 提问。
-        </p>
+    <div className="space-y-5">
+      {/* Hero：左侧欢迎语 + 右侧 AI 特性卡 */}
+      <section className="grid gap-4 lg:grid-cols-[1.5fr_.85fr]">
+        <div className="relative flex min-h-56 items-center overflow-hidden rounded-2xl border border-primary/15 bg-linear-to-br from-accent via-background to-card p-7">
+          <div className="bg-glow pointer-events-none absolute -right-16 -bottom-24 size-64 rounded-full" />
+          <AiCharacter index={1} className="pointer-events-none absolute right-4 bottom-0 hidden h-44 md:block" />
+          <div className="relative">
+            <p className="text-brand-gradient mb-2 text-xs font-bold tracking-[0.14em] uppercase">
+              AI Interview Workspace
+            </p>
+            <h1 className="max-w-xl text-3xl leading-tight font-semibold tracking-tight">准备好下一场面试了吗？</h1>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              基于你的真实简历和目标岗位 JD，让 AI 进行针对性的模拟面试，并在结束后给出结构化复盘。
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2.5">
+              {/* Link 不匹配 :disabled 伪类，用 pointer-events 类禁用（下同） */}
+              <Button asChild aria-disabled={!llmReady} className={cn(!llmReady && "pointer-events-none opacity-50")}>
+                <Link to="/start">
+                  开始一次面试
+                  <ArrowRight />
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/interviews">查看历史记录</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-sidebar-gradient relative overflow-hidden rounded-2xl p-6 text-sidebar-foreground">
+          <div className="bg-glow pointer-events-none absolute -top-14 -right-12 size-48 rounded-full opacity-70" />
+          <div className="relative flex h-full flex-col">
+            <p className="text-xs font-semibold text-sidebar-accent-foreground">AI Interview Agent</p>
+            <div className="bg-brand-gradient my-4 grid size-14 place-items-center rounded-2xl shadow-lg shadow-primary/40">
+              <Sparkles className="size-6" />
+            </div>
+            <h3 className="relative text-base font-semibold text-sidebar-accent-foreground">你的专属面试官</h3>
+            <p className="mt-1 mb-4 text-xs leading-relaxed text-sidebar-foreground/90">
+              会根据简历、JD 和你的回答动态追问，不只是固定题库。
+            </p>
+            <div className="relative mt-auto flex flex-wrap gap-1.5">
+              <FeaturePill>简历 RAG · {resumes.data?.length ?? 0} 份</FeaturePill>
+              <FeaturePill>目标岗位 · {jds.data?.length ?? 0} 个</FeaturePill>
+              <FeaturePill>流式输出</FeaturePill>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* 数据概览四格（demo: grid4 stats） */}
+      <section className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="累计面试"
+          value={String(list.filter((r) => r.role === "interviewer").length)}
+          hint={`面试官 ${list.filter((r) => r.role === "interviewer").length} · 求职者 ${list.filter((r) => r.role === "candidate").length}`}
+          tone="success"
+        />
+        <StatCard
+          label="平均得分"
+          value={avg != null ? String(avg) : "—"}
+          hint={scored.length ? `/ 100 · 最近 ${Math.min(scored.length, 5)} 次` : "完成一场面试后显示"}
+          tone="primary"
+        />
+        <StatCard
+          label="最高得分"
+          value={best?.overall_score != null ? String(best.overall_score) : "—"}
+          hint={best?.resume_title ?? "暂无成绩"}
+          tone="muted"
+        />
+        <StatCard
+          label="简历素材库"
+          value={String(resumes.data?.length ?? 0)}
+          hint={`目标岗位 ${jds.data?.length ?? 0} 个`}
+          tone="warning"
+        />
+      </section>
+
+      {/* 最近面试 + 得分趋势（demo: section-grid 1.35fr/.9fr） */}
+      <section className="grid gap-4 lg:grid-cols-[1.35fr_.9fr]">
         <Card>
-          <CardHeader>
-            <CardTitle>面试官模式</CardTitle>
-            <CardDescription>
-              AI 面试官基于所选简历与 JD 提问并评分，可随时提前结束；结束后生成复盘报告。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div className="grid gap-4">
-                <label className="space-y-1.5">
-                  <span className="text-sm font-medium">选择简历</span>
-                  <select
-                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                    value={resumeId ?? ''}
-                    onChange={(e) => setResumeId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="" disabled>
-                      {resumes.isPending ? '加载中…' : '请选择简历'}
-                    </option>
-                    {resumes.data?.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-sm font-medium">选择 JD（可选）</span>
-                  <select
-                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                    value={jdId ?? ''}
-                    onChange={(e) => setJdId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">不使用 JD</option>
-                    {jds.data?.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+          <CardContent className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold">最近的面试</h3>
+              <Button asChild variant="ghost" size="sm" className="text-primary">
+                <Link to="/interviews">查看全部 →</Link>
+              </Button>
+            </div>
+            {list.length === 0 ? (
+              <div className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+                还没有面试记录，从「开始面试」发起第一场吧。
               </div>
-              {startError && <p className="text-sm text-destructive">{startError}</p>}
-              <Button onClick={() => void startInterview()} disabled={!resumeId || starting}>
-                {starting ? '正在创建…' : '开始面试'}
-              </Button>
-            </div>
+            ) : (
+              <ul className="grid gap-2.5">
+                {list.slice(0, 4).map((r) => (
+                  <RecentRow key={r.id} record={r} />
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>求职者模式</CardTitle>
-            <CardDescription>
-              你扮演面试官向 AI 提问，AI 以简历主人口吻回答（不虚构）；支持追问、即时点评与预设标准答案。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="space-y-1.5">
-              <span className="text-sm font-medium">选择简历（AI 将以该简历身份应答）</span>
-              <select
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                value={resumeId ?? ''}
-                onChange={(e) => setResumeId(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="" disabled>
-                  {resumes.isPending ? '加载中…' : '请选择简历'}
-                </option>
-                {resumes.data?.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {practiceError && <p className="text-sm text-destructive">{practiceError}</p>}
-            <Button variant="secondary" onClick={() => void startPractice()} disabled={!resumeId || practicing}>
-              {practicing ? '正在创建…' : '开始练习'}
-            </Button>
+          <CardContent className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold">得分趋势</h3>
+              <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-medium">
+                最近 {Math.min(scored.length, 7)} 次
+              </span>
+            </div>
+            {scored.length === 0 ? (
+              <div className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+                暂无已评分的面试。
+              </div>
+            ) : (
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={scored.slice(-7).map((r, i) => ({ name: `#${i + 1}`, score: r.overall_score ?? 0 }))}>
+                    <Tooltip
+                      cursor={{ fill: "var(--accent)" }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: "1px solid var(--border)",
+                        background: "var(--card)",
+                        fontSize: 12,
+                      }}
+                      formatter={(v) => [`${v} 分`, null]}
+                      labelFormatter={() => ""}
+                    />
+                    <Bar dataKey="score" fill="var(--primary)" radius={[7, 7, 3, 3]} maxBarSize={38} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>我的账号</CardTitle>
-          <CardDescription>登录态来自 JWT（每次登录会作废之前的 Token）</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-muted-foreground">用户名</span>
-            <span className="font-medium">{me.data?.username}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-muted-foreground">用户 ID</span>
-            <span className="font-mono">{me.data?.id}</span>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-muted-foreground">注册时间</span>
-            <span>
-              {me.data
-                ? new Date(me.data.created_at).toLocaleString('zh-CN', { hour12: false })
-                : '—'}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>服务状态</CardTitle>
-          <CardDescription>前端通过 /api 代理请求后端 /health</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          {health.isPending && <p className="text-muted-foreground">正在检查…</p>}
-
-          {health.isError && (
-            <div className="space-y-3">
-              <StatusRow label="后端服务" ok={false} text="不可达（请确认后端已启动）" />
-              <Button size="sm" variant="outline" onClick={() => void health.refetch()}>
-                重试
-              </Button>
-            </div>
-          )}
-
-          {health.data && (
-            <>
-              <StatusRow
-                label="整体状态"
-                ok={health.data.status === 'ok'}
-                text={overallStatusText(health.data)}
-              />
-              <StatusRow label="后端服务" ok text="在线" />
-              <StatusRow
-                label="数据库"
-                ok={health.data.database === 'up'}
-                text={
-                  health.data.database === 'up'
-                    ? '已连接'
-                    : health.data.database === 'down'
-                      ? '未连接（请 docker compose up -d）'
-                      : '未知'
-                }
-              />
-              <StatusRow
-                label="LLM 模式"
-                ok
-                text={
-                  health.data.app_llm_mode === 'local'
-                    ? 'local（本机 Ollama）'
-                    : 'online（在线模型）'
-                }
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+      </section>
     </div>
-  )
+  );
 }
 
-function overallStatusText(health: HealthResponse): string {
-  switch (health.status) {
-    case 'ok':
-      return '正常'
-    case 'degraded':
-      return '降级（依赖不可用）'
-    case 'error':
-      return `异常（${health.detail ?? '未知错误'}）`
-  }
-}
-
-function StatusRow({ label, ok, text }: { label: string; ok: boolean; text: string }) {
+function StatCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone: "primary" | "success" | "warning" | "muted";
+}) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="flex items-center gap-2">
-        <span className={cn('size-2 rounded-full', ok ? 'bg-green-500' : 'bg-red-500')} />
-        {text}
-      </span>
+    <div className="shadow-card rounded-2xl border bg-card p-5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <strong className="my-1.5 block text-3xl tracking-tight">{value}</strong>
+      {hint && (
+        <small
+          className={cn(
+            "block truncate text-[11px]",
+            tone === "success" && "font-semibold text-success",
+            tone === "primary" && "font-semibold text-primary",
+            tone === "warning" && "text-muted-foreground",
+            tone === "muted" && "text-muted-foreground",
+          )}
+        >
+          {hint}
+        </small>
+      )}
     </div>
-  )
+  );
+}
+
+function RecentRow({ record: r }: { record: InterviewRecord }) {
+  return (
+    <li>
+      <Link
+        to={r.role === "interviewer" ? `/interviews/${r.id}` : `/candidate/sessions/${r.id}`}
+        className="hover:bg-accent/50 flex items-center gap-3 rounded-xl border p-3 transition-colors"
+      >
+        <span
+          className={cn(
+            "grid size-10 shrink-0 place-items-center rounded-xl",
+            r.role === "interviewer" ? "bg-accent text-primary" : "bg-success-soft text-success-foreground",
+          )}
+        >
+          {r.role === "interviewer" ? <Bot className="size-5" /> : <SquareUser className="size-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-sm font-medium">
+            {r.role === "interviewer"
+              ? `${r.resume_title ?? "未关联简历"}${r.jd_title ? ` · ${r.jd_title}` : ""}`
+              : "AI 求职者练习"}
+          </h4>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            {new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })} ·{" "}
+            {r.role === "interviewer" ? "AI 面试官" : "AI 求职者"} · {r.question_count} 题 ·{" "}
+            {r.status === "completed" ? "已完成" : r.status === "in_progress" ? "进行中" : "已结束"}
+          </p>
+        </div>
+        {r.overall_score != null ? (
+          <span className="text-lg font-bold">{r.overall_score}</span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">
+            {r.status === "in_progress" ? "进行中" : r.role === "interviewer" ? "报告中" : "—"}
+          </span>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+function FeaturePill({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-card/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-sm">
+      {children}
+    </span>
+  );
 }

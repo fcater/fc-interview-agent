@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -40,7 +40,13 @@ export function LoginPage() {
   })
 
   return (
-    <div className="mx-auto max-w-sm">
+    <div className="mx-auto w-full max-w-sm py-8">
+      <div className="mb-6 flex flex-col items-center gap-2 text-center">
+        <div className="bg-brand-gradient grid size-12 place-items-center rounded-2xl text-primary-foreground shadow-md shadow-primary/30">
+          <Sparkles className="size-6" />
+        </div>
+        <p className="text-sm text-muted-foreground">登录后进入你的 AI 面试训练空间</p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>登录</CardTitle>

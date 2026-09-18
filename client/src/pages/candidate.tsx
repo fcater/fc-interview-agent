@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, BadgeCheck, Loader2, Send, Sparkles, Square } from 'lucide-react'
+import { AlertCircle, BadgeCheck, Loader2, Sparkles, Square } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent } from '@/components/ui/card'
 import { PresetManager } from '@/components/presets/preset-manager'
+import { ChatBubble, ChatMeta, Composer, SoftBadge } from '@/components/chat/chat'
 import {
   ApiError,
   candidateApi,
@@ -17,14 +17,16 @@ import {
   type CandidateStreamEvent,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useLlmReady } from '@/hooks/use-health'
 import { useCandidateStore, type CandidateMessage } from '@/stores/candidate-store'
 
-/** 求职者模式会话页（M6）：用户扮演面试官提问，AI 以简历主人口吻流式作答 */
+/** 求职者模式会话页（M6）：左练习面板 + 主聊天；点评/预设入口在输入区（对照 demo 分布） */
 export function CandidatePage() {
   const { id } = useParams()
   const sessionId = Number(id)
   const store = useCandidateStore()
   const queryClient = useQueryClient()
+  const llmReady = useLlmReady()
 
   const [question, setQuestion] = useState('')
   const abortRef = useRef<AbortController | null>(null)
@@ -85,14 +87,15 @@ export function CandidatePage() {
     [sessionId],
   )
 
-  // 初始化/断连恢复：快照判定需要开流（无问答历史的新会话，或作答中断线）
+  // 初始化/断连恢复：快照判定需要开流（无问答历史的新会话，或作答中断线）；
+  // LLM 不可用时挂起，健康检查就绪后自动开流
   useEffect(() => {
     if (!ready) return
-    if (store.status === 'in_progress' && store.needsStream && !store.streaming) {
+    if (llmReady && store.status === 'in_progress' && store.needsStream && !store.streaming) {
       void openStream('start')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready])
+  }, [ready, llmReady])
 
   const askQuestion = () => {
     const content = question.trim()
@@ -118,128 +121,186 @@ export function CandidatePage() {
   }
 
   const finished = store.status !== 'in_progress'
+  const phase = store.streaming
+    ? 'AI 回答中…'
+    : finished
+      ? '练习已结束'
+      : store.canCritique
+        ? '可请求点评'
+        : '等待你的提问'
+
+  // 练习流程步骤高亮：按当前阶段推导
+  const stepState = (key: 'init' | 'ask' | 'answer' | 'critique') => {
+    if (finished) return 'done'
+    if (store.streaming) return key === 'answer' ? 'current' : 'done'
+    if (key === 'init' || key === 'ask') return 'done'
+    return key === 'critique' && store.canCritique ? 'current' : 'todo'
+  }
 
   return (
-    <div
-      className={cn(
-        'mx-auto max-w-3xl',
-        // 进行中：固定视口高度聊天布局；结束后：文档流滚动
-        finished ? 'space-y-4' : 'flex h-[calc(100vh-8rem)] flex-col gap-4',
+    <div className="gap-4 lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
+      {/* 左侧练习面板（demo interview-side；移动端隐藏，结束按钮移到标题行） */}
+      {!finished && (
+        <aside className="shadow-card mb-4 hidden flex-col rounded-2xl border bg-card p-4 lg:sticky lg:top-20 lg:mb-0 lg:flex lg:max-h-[calc(100svh-6rem)]">
+          <div className="rounded-xl border bg-success-soft/60 p-3.5">
+            <p className="text-sm font-semibold">AI 求职者练习</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">基于你的简历进行回答训练</p>
+          </div>
+          <p className="mt-4 mb-2.5 text-xs font-bold">练习流程</p>
+          <div className="grid gap-1">
+            {(
+              [
+                ['init', '初始化上下文'],
+                ['ask', '提问'],
+                ['answer', 'AI 回答'],
+                ['critique', '请求点评'],
+              ] as const
+            ).map(([key, label]) => {
+              const state = stepState(key)
+              return (
+                <div
+                  key={key}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-lg px-1.5 py-2 text-[11px]',
+                    state === 'current' && 'bg-accent font-bold text-primary',
+                    state === 'done' && 'text-muted-foreground',
+                    state === 'todo' && 'text-muted-foreground/70',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid size-6 shrink-0 place-items-center rounded-full font-bold',
+                      state === 'current' && 'bg-primary text-primary-foreground',
+                      state === 'done' && 'bg-success-soft text-success-foreground',
+                      state === 'todo' && 'bg-muted',
+                    )}
+                  >
+                    {state === 'done' ? '✓' : key === 'ask' ? store.questionIndex || 2 : key === 'init' ? 1 : key === 'answer' ? 3 : 4}
+                  </span>
+                  {label}
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-4 border-t pt-3.5">
+            <p className="text-[10px] text-muted-foreground">当前轮次</p>
+            <p className="mt-0.5 text-lg font-bold">第 {store.questionIndex} 问</p>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            你可以像真实面试官一样提问，AI 会基于简历回答；支持命中预设答案。
+          </p>
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            className="border-destructive/30 bg-destructive-soft text-destructive hover:bg-destructive-soft hover:text-destructive"
+            disabled={store.streaming || !llmReady}
+            onClick={finishPractice}
+          >
+            <Square />
+            结束练习
+          </Button>
+        </aside>
       )}
-    >
-      {/* 顶栏：进度 + 预设管理 + 点评 + 结束 */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
-          {store.status === 'in_progress' ? (
-            <>
-              求职者模式 · 第 <span className="font-medium text-foreground">{store.questionIndex}</span> 问
-            </>
-          ) : (
-            <span className="font-medium text-foreground">练习已结束（共 {store.questionCount} 问）</span>
-          )}
-        </div>
-        {store.status === 'in_progress' && (
-          <div className="flex items-center gap-2">
-            <PresetManager />
+
+      {/* 主区：标题行 + 聊天 + 输入区；结束后追加完成卡 */}
+      <div className={cn('flex min-w-0 flex-col gap-4', !finished && 'h-[calc(100svh-10rem)]')}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <h2 className="text-lg font-semibold">{finished ? '练习完成' : 'AI 求职者'}</h2>
+            <span className="bg-accent text-primary rounded-full px-2.5 py-1 text-[11px] font-bold">{phase}</span>
+          </div>
+          {!finished && (
             <Button
               size="sm"
               variant="outline"
-              disabled={store.streaming || !store.canCritique}
-              onClick={requestCritique}
+              className="border-destructive/30 bg-destructive-soft text-destructive hover:bg-destructive-soft hover:text-destructive lg:hidden"
+              disabled={store.streaming || !llmReady}
+              onClick={finishPractice}
             >
-              <Sparkles />
-              请求点评
-            </Button>
-            <Button size="sm" variant="outline" disabled={store.streaming} onClick={finishPractice}>
               <Square />
               结束练习
             </Button>
+          )}
+        </div>
+
+        {/* 消息区 */}
+        <Card className={cn('flex flex-col', finished ? 'h-[55vh] shrink-0' : 'min-h-0 flex-1')}>
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+            {store.messages.map((msg, i) => (
+              <MessageBubble key={i} message={msg} />
+            ))}
+            {store.streamingText && (
+              <MessageBubble
+                message={{
+                  role: 'assistant',
+                  kind: 'answer',
+                  content: store.streamingText,
+                  questionIndex: 0,
+                  usedPreset: false,
+                }}
+                streaming
+              />
+            )}
+            {store.streaming && !store.streamingText && (
+              <div className="flex items-center gap-2.5 px-1 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                {store.messages.at(-1)?.role === 'user' ? '检索简历并组织回答中…' : '处理中…'}
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </CardContent>
+        </Card>
+
+        {/* 错误提示 */}
+        {store.error && (
+          <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive-soft px-3 py-2 text-sm text-destructive">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{store.error}</span>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={() => window.location.reload()}>
+              重新加载
+            </Button>
           </div>
         )}
-      </div>
 
-      {/* 消息区 */}
-      <Card className={cn('flex flex-col', finished ? 'h-[55vh] shrink-0' : 'min-h-0 flex-1')}>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-          {store.messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
-          ))}
-          {store.streamingText && (
-            <MessageBubble
-              message={{
-                role: 'assistant',
-                kind: 'answer',
-                content: store.streamingText,
-                questionIndex: 0,
-                usedPreset: false,
-              }}
-              streaming
-            />
-          )}
-          {store.streaming && !store.streamingText && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {store.messages.at(-1)?.role === 'user' ? '检索简历并组织回答中…' : '处理中…'}
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </CardContent>
-      </Card>
+        {/* 结束提示（求职者模式无评分报告） */}
+        {finished && (
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold">练习完成</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                本次练习共 {store.questionCount} 问；点评已即时给出，可从面试记录页回看完整问答。
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* 错误提示 */}
-      {store.error && (
-        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <AlertCircle className="size-4 shrink-0" />
-          <span>{store.error}</span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={() => window.location.reload()}
-          >
-            重新加载
-          </Button>
-        </div>
-      )}
-
-      {/* 结束提示（求职者模式无评分报告） */}
-      {finished && (
-        <Card>
-          <CardHeader>
-            <CardTitle>练习完成</CardTitle>
-            <CardDescription>
-              本次练习共 {store.questionCount} 问；点评已即时给出，可从面试记录页回看完整问答。
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
-      {/* 提问输入区 */}
-      {!finished && (
-        <div className="flex items-end gap-2">
-          <Textarea
+        {/* 提问输入区：预设管理与点评入口在输入区（demo compose-bottom） */}
+        {!finished && (
+          <Composer
             value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                askQuestion()
-              }
-            }}
-            placeholder="以面试官身份提问…（Enter 发送，Shift+Enter 换行）"
-            disabled={store.streaming}
-            className="min-h-20 resize-none"
+            onChange={setQuestion}
+            onSubmit={askQuestion}
+            placeholder="输入面试官问题…"
+            disabled={store.streaming || !llmReady}
+            sendDisabled={store.streaming || !question.trim() || !llmReady}
+            tip="提问后可请求点评最近一次回答"
+            actions={
+              <>
+                <PresetManager />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={store.streaming || !store.canCritique || !llmReady}
+                  onClick={requestCritique}
+                >
+                  <Sparkles />
+                  点评回答
+                </Button>
+              </>
+            }
           />
-          <Button
-            size="icon"
-            className="size-10 shrink-0"
-            disabled={store.streaming || !question.trim()}
-            onClick={askQuestion}
-          >
-            <Send className="size-4" />
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -247,53 +308,43 @@ export function CandidatePage() {
 function MessageBubble({ message, streaming = false }: { message: CandidateMessage; streaming?: boolean }) {
   if (message.role === 'user') {
     return (
-      <div className="flex flex-col items-end gap-1">
-        <div className="max-w-[85%] rounded-lg bg-primary px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-primary-foreground">
-          {message.content}
-        </div>
+      <div className="flex flex-col items-end gap-1.5">
+        <ChatBubble side="right">
+          <span className="whitespace-pre-wrap">{message.content}</span>
+        </ChatBubble>
       </div>
     )
   }
 
   if (message.kind === 'answer') {
     return (
-      <div className="flex flex-col items-start gap-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-col items-start gap-1.5">
+        <ChatMeta>
           <span>第 {message.questionIndex} 问</span>
           {message.usedPreset && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-green-500/15 px-1.5 py-0.5 text-green-600 dark:text-green-400">
+            <SoftBadge tone="success">
               <BadgeCheck className="size-3" />
               预设答案
-            </span>
+            </SoftBadge>
           )}
-        </div>
-        <div
-          className={cn(
-            'max-w-[85%] rounded-lg bg-muted px-4 py-2.5 text-sm leading-relaxed',
-            streaming && 'opacity-80',
-          )}
-        >
+        </ChatMeta>
+        <ChatBubble side="left" className={cn(streaming && 'opacity-80')}>
           {/* AI 输出为 Markdown（react-markdown 默认转义防注入） */}
           <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
-        </div>
+        </ChatBubble>
       </div>
     )
   }
 
   // 点评：结构化三段（优点/不足/建议）；快照恢复为落库文本
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Sparkles className="size-3" />
-        回答点评
-      </div>
-      <div className="max-w-[85%] rounded-lg border border-dashed bg-muted/40 px-4 py-2.5 text-sm leading-relaxed">
-        {message.structured ? (
-          <CritiqueSections structured={message.structured} />
-        ) : (
-          <span className="italic whitespace-pre-wrap">{message.text}</span>
-        )}
-      </div>
+    <div className="ml-6 max-w-[85%] rounded-xl border border-dashed border-primary/30 bg-accent/70 px-4 py-2.5 text-sm">
+      <ChatMeta className="mb-1 text-primary">◇ 回答点评</ChatMeta>
+      {message.structured ? (
+        <CritiqueSections structured={message.structured} />
+      ) : (
+        <span className="italic whitespace-pre-wrap">{message.text}</span>
+      )}
     </div>
   )
 }

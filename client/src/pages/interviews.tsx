@@ -1,99 +1,149 @@
 /**
- * 面试记录页（M5）：历史面试列表（会话概要 + 简历/JD 标题 + 综合评分），
- * 点击进入会话页查看复盘报告。数据按用户隔离（后端 E7）。
+ * 面试记录页（M5）：搜索 + 模式筛选 + 会话列表（评分 / 行内操作按钮），
+ * 内容分布对照原型 demo history 页。数据按用户隔离（后端 E7）。
  */
 
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
-import { ClipboardList, Loader2, MessageSquare } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { interviewApi } from '@/lib/api'
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link } from "react-router";
+import { Bot, Loader2, Plus, Search, SquareUser } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { interviewApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useLlmReady } from "@/hooks/use-health";
 
-const STATUS_LABEL: Record<string, string> = {
-  in_progress: '进行中',
-  completed: '已完成',
-  aborted: '已结束',
-}
+type InterviewRecord = Awaited<ReturnType<typeof interviewApi.list>>[number];
 
-/** 历史面试列表：按时间倒序，评分列显示综合分或生成状态 */
+/** 历史面试列表：按时间倒序，行内提供查看报告 / 继续会话入口 */
 export function InterviewsPage() {
-  const records = useQuery({ queryKey: ['interviews'], queryFn: interviewApi.list })
+  const records = useQuery({ queryKey: ["interviews"], queryFn: interviewApi.list });
+  const llmReady = useLlmReady();
+  const [keyword, setKeyword] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "interviewer" | "candidate">("all");
+
+  const filtered = (records.data ?? []).filter((r) => {
+    if (roleFilter !== "all" && r.role !== roleFilter) return false;
+    if (!keyword.trim()) return true;
+    const kw = keyword.trim().toLowerCase();
+    return `${r.resume_title ?? ""}${r.jd_title ?? ""}`.toLowerCase().includes(kw);
+  });
 
   return (
-    <div className="space-y-8">
-      <section>
-        <h1 className="text-2xl font-semibold tracking-tight">面试记录</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          历史面试列表；结束后评分报告将自动生成，点击进入查看复盘。
-        </p>
-      </section>
-
+    <div className="space-y-5">
+      <PageHeader
+        title="面试记录"
+        description="查看所有历史面试与评分结果。"
+        character={6}
+        actions={
+          <Button asChild aria-disabled={!llmReady} className={cn(!llmReady && "pointer-events-none opacity-50")}>
+            <Link to="/start">
+              <Plus />
+              新建面试
+            </Link>
+          </Button>
+        }
+      />
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-5">
+          {/* 筛选工具条（demo toolbar：搜索 + 模式下拉） */}
+          <div className="mb-4 flex flex-col sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+              <Input
+                className="pl-9"
+                placeholder="搜索岗位 / 简历"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </div>
+            <Select
+              className="sm:w-40"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+            >
+              <option value="all">全部模式</option>
+              <option value="interviewer">AI 面试官</option>
+              <option value="candidate">AI 求职者</option>
+            </Select>
+          </div>
+
           {records.isPending && (
-            <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> 加载中…
             </p>
           )}
-          {records.isError && (
-            <p className="p-6 text-sm text-destructive">{records.error.message}</p>
+          {records.isError && <p className="py-6 text-sm text-destructive">{records.error.message}</p>}
+          {records.data && filtered.length === 0 && (
+            <p className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+              {records.data.length === 0 ? "还没有面试记录，从「开始面试」发起第一场吧。" : "没有匹配的记录。"}
+            </p>
           )}
-          {records.data && records.data.length === 0 && (
-            <p className="p-6 text-sm text-muted-foreground">还没有面试记录，从首页发起一场吧。</p>
-          )}
-          <ul className="divide-y">
-            {records.data?.map((r) => (
-              <li key={r.id}>
-                <Link
-                  to={r.role === 'interviewer' ? `/interviews/${r.id}` : `/candidate/sessions/${r.id}`}
-                  className="flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-accent/50"
-                >
-                  <ClipboardList className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
-                      {r.resume_title ?? '未关联简历'}
-                      <span className="mx-1.5 text-muted-foreground">×</span>
-                      {r.jd_title ?? '未关联 JD'}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{r.role === 'interviewer' ? '面试官模式' : '求职者模式'}</span>
-                      <span className="inline-flex items-center gap-0.5">
-                        <MessageSquare className="size-3" />
-                        {r.question_count} 题
-                      </span>
-                      <span>
-                        {new Date(r.created_at).toLocaleString('zh-CN', { hour12: false })}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                      {STATUS_LABEL[r.status] ?? r.status}
-                    </span>
-                    {/* 求职者模式无评分报告语义：综合分列显示「—」 */}
-                    {r.role === 'interviewer' ? <ScoreBadge score={r.overall_score} /> : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </Link>
-              </li>
+
+          <ul className="grid gap-2.5">
+            {filtered.map((r) => (
+              <SessionRow key={r.id} record={r} />
             ))}
           </ul>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
-/** 综合评分徽章：未生成时显示"报告中"（异步生成中） */
-function ScoreBadge({ score }: { score: number | null | undefined }) {
-  if (score === null || score === undefined) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" />
-        报告中
+function SessionRow({ record: r }: { record: InterviewRecord }) {
+  const llmReady = useLlmReady();
+  const link = r.role === "interviewer" ? `/interviews/${r.id}` : `/candidate/sessions/${r.id}`;
+  // 仅「继续会话 / 继续练习」（in_progress）依赖 LLM；查看报告只读不禁用
+  const needsLlm = r.status === "in_progress";
+  return (
+    <li className="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:bg-accent/40">
+      <span
+        className={cn(
+          "grid size-10 shrink-0 place-items-center rounded-xl",
+          r.role === "interviewer" ? "bg-accent text-primary" : "bg-success-soft text-success-foreground",
+        )}
+      >
+        {r.role === "interviewer" ? <Bot className="size-5" /> : <SquareUser className="size-5" />}
       </span>
-    )
-  }
-  return <span className="text-sm font-semibold text-primary">{score} 分</span>
+      <div className="min-w-0 flex-1">
+        <h4 className="truncate text-sm font-medium">
+          {r.role === "interviewer"
+            ? `${r.resume_title ?? "未关联简历"}${r.jd_title ? ` · ${r.jd_title}` : ""}`
+            : "AI 求职者练习"}
+        </h4>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          {new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })} ·{" "}
+          {r.role === "interviewer" ? "AI 面试官" : "AI 求职者"} · {r.question_count} 题
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        {r.role === "interviewer" && r.overall_score != null && (
+          <span className={cn("text-lg font-bold", r.overall_score >= 80 ? "text-success" : "text-warning-foreground")}>
+            {r.overall_score}
+          </span>
+        )}
+        {r.role === "interviewer" && r.status === "completed" && r.overall_score == null && (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            报告中
+          </span>
+        )}
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          aria-disabled={!llmReady && needsLlm}
+          className={cn(!llmReady && needsLlm && "pointer-events-none opacity-50")}
+        >
+          <Link to={link}>
+            {r.status === "in_progress" ? "继续会话" : r.role === "interviewer" ? "查看报告" : "继续练习"}
+          </Link>
+        </Button>
+      </div>
+    </li>
+  );
 }

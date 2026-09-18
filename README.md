@@ -7,7 +7,7 @@ AI 面试模拟 Agent：基于「个人简历 + 目标岗位 JD」的中文模�
 - [docs/project-scope.md](docs/project-scope.md) — 项目范围：目标、核心功能、扩展点、MVP 边界
 - [docs/tech-stack.md](docs/tech-stack.md) — 技术选型：Python + LangChain + LangGraph / FastAPI / PostgreSQL + pgvector / React
 - [docs/roadmap.md](docs/roadmap.md) — 开发 Roadmap：M0–M7 阶段任务与验收标准
-- [docs/progress/milestones.md](docs/progress/milestones.md) — 开发进度：M0–M7 阶段状态、日期与提交归档
+- `docs/progress/[20260915]MVP.md` — 开发进度：M0–M7 阶段状态、日期与提交归档（进度文件按「[YYYYMMDD]主题」命名归档）
 
 ## 目录结构
 
